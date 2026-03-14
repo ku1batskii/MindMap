@@ -1,4 +1,5 @@
-import { useState, useEffect, useRef, useCallback } from “react”;
+import { useState, useEffect, useRef, useCallback } from "react";
+
 
 const TFILL   = {idea:”#002a38”,subgoal:”#00210f”,step:”#181e18”,risk:”#280010”,alternative:”#160028”};
 const TSTROKE = {idea:”#00d4ff”,subgoal:”#00ff55”,step:”#88bb88”,risk:”#ff2255”,alternative:”#bb66ff”};
