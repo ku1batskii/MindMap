@@ -479,7 +479,7 @@ export default function MindMap() {
   const logColor = { s: "rgba(0,255,136,0.6)", u: "#00ccee", e: "#ff5566", o: "#00ff88" };
 
   return (
-    <div style={{ background: "#090909", color: "#00ff88", fontFamily: "'Courier New',monospace", height: "100vh", display: "flex", flexDirection: "column", overflow: "hidden" }}>
+    <div style={{ background: "#090909", color: "#00ff88", fontFamily: "'Courier New',monospace", height: "100dvh", display: "flex", flexDirection: "column", overflow: "hidden" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "7px 14px", borderBottom: "1px solid #1e4428", flexShrink: 0 }}>
         <span style={{ fontSize: 10, color: "rgba(0,255,136,0.55)", letterSpacing: 4 }}>MIND MAP</span>
         <span style={{ fontSize: 10, color: "#44aa66", marginLeft: "auto" }}>{tree.nodes.length} nodes</span>
@@ -622,7 +622,7 @@ export default function MindMap() {
         ))}
       </div>
 
-      <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 14px", borderTop: "1px solid #1e4428", background: "#060d06", flexShrink: 0 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 14px calc(8px + env(safe-area-inset-bottom)) 14px", borderTop: "1px solid #1e4428", background: "#060d06", flexShrink: 0 }}>
         <span style={{ color: "rgba(0,255,136,0.6)", fontSize: 14 }}>›</span>
         <input
           value={input}
@@ -639,5 +639,3 @@ export default function MindMap() {
 
       <style>{"@keyframes blink{0%,100%{opacity:1}50%{opacity:0}}"}</style>
     </div>
-  );
-}
