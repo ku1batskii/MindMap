@@ -461,7 +461,7 @@ export default function MindMap() {
         const ids  = new Set(prev.nodes.map(n => n.id));
         const fresh = updated.nodes
           .filter(n => !ids.has(n.id))
-          .map(n => ({ ...n, title: n.title || generateTitle(n.note) }));
+          .map(n => ({ ...n, title: n.title || n.note.split(' ').slice(0,3).join(' ') }));
         const merged = [...prev.nodes, ...fresh];
         if (!goal && merged.length) return { goal: merged[0].title, nodes: merged };
         return { goal, nodes: merged };
@@ -639,3 +639,5 @@ export default function MindMap() {
 
       <style>{"@keyframes blink{0%,100%{opacity:1}50%{opacity:0}}"}</style>
     </div>
+  );
+}
