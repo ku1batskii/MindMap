@@ -509,7 +509,7 @@ export default function MindMap() {
     if (busy) return;
     setBusy(true);
     lg("u", "▸ " + trunc(val, 60));
-    lg("s", "строю карту…");
+    lg("b", "строю карту…");
     try {
       const updated = await fetchMap(val, treeRef.current);
       // 5. Compute fresh IDs before setTree for animation
@@ -544,7 +544,7 @@ export default function MindMap() {
   }, [busy, lg]);
 
   const send = () => { if (!input.trim() || busy) return; const v = input; setInput(""); process(v); };
-  const logColor = { s: "rgba(0,255,136,0.6)", u: "#00ccee", e: "#ff5566", o: "#00ff88" };
+  const logColor = { b: "#ffdd44", s: "rgba(0,255,136,0.6)", u: "#00ccee", e: "#ff5566", o: "#00ff88" };
 
   // Edit menu button style
   const editBtnStyle = {
@@ -596,7 +596,6 @@ export default function MindMap() {
           SAVE
         </button>
         <span style={{ fontSize: 10, color: "#44aa66", marginLeft: "auto" }}>{tree.nodes.length} nodes</span>
-        {busy && <span style={{ fontSize: 10, color: "#ffdd44", animation: "blink 0.5s step-end infinite" }}>...</span>}
       </div>
 
       <div style={{ flex: 1, overflow: "hidden", position: "relative" }}>
@@ -782,7 +781,7 @@ export default function MindMap() {
 
       <div ref={logRef} style={{ borderTop: "1px solid #1e4428", background: "#060d06", maxHeight: "22vh", overflowY: "auto", padding: "5px 14px", flexShrink: 0 }}>
         {log.map((l, i) => (
-          <div key={i} style={{ fontSize: 11, lineHeight: 1.6, color: logColor[l.c] || "#aaa" }}>{l.t}</div>
+          <div key={i} style={{ fontSize: 11, lineHeight: 1.6, color: logColor[l.c] || "#aaa" }}>{l.t}{l.c === "b" && <span style={{ animation: "blink 0.5s step-end infinite" }}> ...</span>}</div>
         ))}
       </div>
 
