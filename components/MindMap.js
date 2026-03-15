@@ -64,6 +64,13 @@ function fallback(input, existing) {
   };
 }
 
+
+function smartTitle(note) {
+  if (!note) return "Идея";
+  const stop = new Set(["я","мой","моя","мне","это","как","что","для","все","они","его","или","но","и","в","на","по","от","до"]);
+  const words = (note || "").split(" ").filter(w => w.length > 2 && !stop.has(w.toLowerCase()));
+  return words.slice(0, 3).join(" ") || note.split(" ").slice(0, 3).join(" ");
+}
 async function fetchMap(input, tree) {
   const ids  = tree.nodes.map(n => n.id);
   const maxN = ids.reduce((m, id) => {
@@ -129,7 +136,7 @@ async function fetchMap(input, tree) {
       const res2 = await fetch("/api/ai", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ model: "claude-haiku-4-5-20251001", max_tokens: 300, messages: [{ role: "user", content: prompt2 }] })
+        body: JSON.stringify({ model: "claude-haiku-4-5-20251001", max_tokens: 800, messages: [{ role: "user", content: prompt2 }] })
       });
       const data2 = await res2.json();
       const raw2  = (data2.content?.[0]?.text || "").replace(/```json/gi,"").replace(/```/g,"").trim();
@@ -467,7 +474,7 @@ export default function MindMap() {
         const ids  = new Set(prev.nodes.map(n => n.id));
         const fresh = updated.nodes
           .filter(n => !ids.has(n.id))
-          .map(n => ({ ...n, title: n.title || n.note.split(' ').slice(0,3).join(' ') }));
+          .map(n => ({ ...n, title: n.title || smartTitle(n.note) }));
         const merged = [...prev.nodes, ...fresh];
         if (!goal && merged.length) return { goal: merged[0].title, nodes: merged };
         return { goal, nodes: merged };
