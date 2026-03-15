@@ -96,17 +96,7 @@ async function fetchMap(input, tree) {
     CLIENT_CONFIG.systemContext + " Keep existing nodes. New IDs from n" + (maxN+1) + ". parentId refs existing id or null. Same language as input.\n" +
     "Existing: " + JSON.stringify(compact) + "\nInput: " + input;
 
-    async function fetchWithRetry(url, options, retries = 3) {
-    for (let i = 0; i < retries; i++) {
-      const r = await fetch(url, options);
-      if (r.status === 429 && i < retries - 1) {
-        await new Promise(res => setTimeout(res, 2000 * (i + 1)));
-        continue;
-      }
-      return r;
-    }
-  }
-  const res1 = await fetchWithRetry("/api/ai", {
+  const res1 = await fetch("/api/ai", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ model: "claude-haiku-4-5-20251001", max_tokens: 1600, messages: [{ role: "user", content: prompt1 }] })
@@ -150,7 +140,7 @@ async function fetchMap(input, tree) {
       "Already used titles (DO NOT repeat): " + tree.nodes.filter(n => n.title).map(n => n.title).join(", ") + "\n\nNotes:\n" + notesList;
 
     try {
-      const res2 = await fetchWithRetry("/api/ai", {
+      const res2 = await fetch("/api/ai", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ model: "claude-haiku-4-5-20251001", max_tokens: 800, messages: [{ role: "user", content: prompt2 }] })
@@ -505,32 +495,6 @@ export default function MindMap() {
     }
   }, [busy, lg]);
 
-
-  const exportPNG = useCallback(() => {
-    const svg = svgRef.current; if (!svg) return;
-    const rect = svg.getBoundingClientRect();
-    const canvas = document.createElement("canvas");
-    const scale = 2;
-    canvas.width = rect.width * scale;
-    canvas.height = rect.height * scale;
-    const ctx = canvas.getContext("2d");
-    ctx.scale(scale, scale);
-    ctx.fillStyle = "#090909";
-    ctx.fillRect(0, 0, rect.width, rect.height);
-    const svgData = new XMLSerializer().serializeToString(svg);
-    const img = new Image();
-    const blob = new Blob([svgData], { type: "image/svg+xml;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    img.onload = () => {
-      ctx.drawImage(img, 0, 0);
-      URL.revokeObjectURL(url);
-      const a = document.createElement("a");
-      a.download = "mindmap.png";
-      a.href = canvas.toDataURL("image/png");
-      a.click();
-    };
-    img.src = url;
-  }, []);
   const send = () => { if (!input.trim() || busy) return; const v = input; setInput(""); process(v); };
   const logColor = { s: "rgba(0,255,136,0.6)", u: "#00ccee", e: "#ff5566", o: "#00ff88" };
 
@@ -539,9 +503,8 @@ export default function MindMap() {
       <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "7px 14px", borderBottom: "1px solid #1e4428", flexShrink: 0 }}>
         <span style={{ fontSize: 10, color: "rgba(0,255,136,0.55)", letterSpacing: 4 }}>MIND MAP</span>
         <span style={{ fontSize: 10, color: "#44aa66", marginLeft: "auto" }}>{tree.nodes.length} nodes</span>
-        <button onClick={exportPNG} disabled={!tree.nodes.length} style={{ background: "transparent", border: "1px solid rgba(0,255,136,0.45)", color: tree.nodes.length ? "rgba(0,255,136,0.85)" : "rgba(0,255,136,0.25)", fontFamily: "'Courier New',monospace", fontSize: 9, padding: "2px 8px", cursor: tree.nodes.length ? "pointer" : "default", letterSpacing: 2 }}>PNG</button>
         {busy && <span style={{ fontSize: 10, color: "#ffdd44", animation: "blink 0.5s step-end infinite" }}>...</span>}
-        
+        <button onClick={fit} style={{ background: "transparent", border: "1px solid rgba(0,255,136,0.45)", color: "rgba(0,255,136,0.85)", fontFamily: "'Courier New',monospace", fontSize: 9, padding: "2px 8px", cursor: "pointer", letterSpacing: 2 }}>FIT</button>
       </div>
 
       <div style={{ flex: 1, overflow: "hidden", position: "relative" }}>
@@ -664,7 +627,7 @@ export default function MindMap() {
 
         <div style={{ position: "absolute", bottom: 10, right: 12, display: "flex", flexDirection: "column", gap: 3 }}>
           {[["\uFF0B", 1.25], ["\uFF0D", 0.8]].map(([lbl, f]) => (
-            <button key={lbl} onClick={() => action === "fit" ? fit() : setTransform(t => ({ ...t, scale: Math.min(5, Math.max(0.05, t.scale * f)) }))}
+            <button key={lbl} onClick={() => setTransform(t => ({ ...t, scale: Math.min(5, Math.max(0.05, t.scale * f)) }))}
               style={{ width: 26, height: 26, background: "#0a120a", border: "1px solid #1e4428", color: "rgba(0,255,136,0.8)", fontSize: 14, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
               {lbl}
             </button>
