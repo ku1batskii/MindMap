@@ -1,9 +1,4 @@
-import { Redis } from '@upstash/redis';
-
-const redis = new Redis({
-  url: process.env.KV_REST_API_URL,
-  token: process.env.KV_REST_API_TOKEN,
-});
+import { createClient } from 'redis';
 
 const TFILL   = {idea:'#002a38',subgoal:'#00210f',step:'#181e18',risk:'#280010',alternative:'#160028'};
 const TSTROKE = {idea:'#00d4ff',subgoal:'#00ff55',step:'#88bb88',risk:'#ff2255',alternative:'#bb66ff'};
@@ -124,11 +119,10 @@ export default function ViewPage({ tree, pos }) {
 
 export async function getServerSideProps({ params }) {
   try {
-    const redis = new Redis({
-      url: process.env.KV_REST_API_URL,
-      token: process.env.KV_REST_API_TOKEN,
-    });
-    const data = await redis.get(`map:${params.slug}`);
+    const client = createClient({ url: process.env.REDIS_URL });
+    await client.connect();
+    const data = await client.get(`map:${params.slug}`);
+    await client.disconnect();
     if (!data) return { notFound: true };
     const { tree, pos } = typeof data === 'string' ? JSON.parse(data) : data;
     return { props: { tree, pos } };
