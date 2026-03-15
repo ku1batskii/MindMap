@@ -21,9 +21,10 @@ const NOTE_GAP = 6;
 const NOTE_LH  = 13;
 const BADGE_H  = 14;
 
+// FIX 4: let lines so we can reassign; truncation before return
 function wrapText(text, maxChars) {
   const words = (text || "").split(" ");
-  const lines = [];
+  let lines = [];
   let cur = "";
   for (const word of words) {
     const candidate = cur ? cur + " " + word : word;
@@ -31,7 +32,8 @@ function wrapText(text, maxChars) {
     else { if (cur) lines.push(cur); cur = word; }
   }
   if (cur) lines.push(cur);
-  return lines.map(line => line.length > maxChars ? line.slice(0, maxChars) + "-" : line);
+  lines = lines.map(l => l.length > maxChars ? l.slice(0, maxChars) + "-" : l);
+  return lines;
 }
 
 function nodeHeight(title, note) {
@@ -49,8 +51,8 @@ function nodeHeight(title, note) {
 function uid() { return "n" + (Date.now() % 1e9) + "_" + Math.floor(Math.random() * 999); }
 function trunc(s, n) { return s && s.length > n ? s.slice(0, n) + "?" : s || ""; }
 
+// FIX 3: use uid() for IDs in fallback
 function fallback(input, existing) {
-  const base = existing.length;
   const lines = input.split(/[.\n!?]/).map(l => l.trim()).filter(l => l.length > 2).slice(0, 8);
   const src = lines.length ? lines : [input.trim()];
   return {
@@ -71,6 +73,7 @@ function smartTitle(note) {
   const words = (note || "").split(" ").filter(w => w.length > 2 && !stop.has(w.toLowerCase()));
   return words.slice(0, 3).join(" ") || note.split(" ").slice(0, 3).join(" ");
 }
+
 async function fetchMap(input, tree) {
   const ids  = tree.nodes.map(n => n.id);
   const maxN = ids.reduce((m, id) => {
@@ -164,7 +167,6 @@ async function fetchMap(input, tree) {
   return p;
 }
 
-// FIX 1: Smart anchor ? ????? ???????? ? ????????? ??????? ????
 function smartAnchor(px, py, ph, cx, cy, ch) {
   const dx = cx - px, dy = cy - py;
   let sx, sy, tx, ty;
@@ -192,7 +194,6 @@ function computeLayout(tree, pos, W, H) {
   orphans.forEach((id, i) => {
     if (next[id]) return;
     const a = (i / Math.max(orphans.length, 1)) * Math.PI * 2 - Math.PI / 2;
-    // FIX 3: ???????? ?????? ? ???? ?????? ???? ?? ?????
     const r = Math.max(300, orphans.length * 60);
     next[id] = { x: cx + r * Math.cos(a), y: cy + 80 + r * 0.6 * Math.sin(a) };
   });
@@ -207,7 +208,6 @@ function computeLayout(tree, pos, W, H) {
       const pNode = tree.nodes.find(n => n.id === pid);
       const pnh = nodeHeight(pNode ? pNode.title : "", pNode ? pNode.note : "");
       kids.forEach((kid, i) => {
-        // FIX 3: ????????? ??????? ????? ????????? ??????
         if (!next[kid]) next[kid] = { x: pp.x + (i - (kids.length - 1) / 2) * 240, y: pp.y + pnh / 2 + 110 + depth * 4 };
         if (!visited[kid]) { visited[kid] = true; nq.push(kid); }
       });
@@ -218,25 +218,32 @@ function computeLayout(tree, pos, W, H) {
 }
 
 export default function MindMap() {
-  const [tree, setTree]           = useState({ goal: "", nodes: [] });
-  const [pos, setPos]             = useState({});
-  const [log, setLog]             = useState([
+  const [tree, setTree]               = useState({ goal: "", nodes: [] });
+  const [pos, setPos]                 = useState({});
+  const [log, setLog]                 = useState([
     { c: "s", t: "MIND MAP -- введи текст внизу" },
-    { c: "s", t: "/mock -- \u0442\u0435\u0441\u0442 \u00b7 /clear -- \u0441\u0431\u0440\u043e\u0441" }
+    { c: "s", t: "/mock -- тест · /clear -- сброс" }
   ]);
-  const [input, setInput]         = useState("");
-  const [busy, setBusy]           = useState(false);
-  const [transform, setTransform] = useState({ x: 0, y: 0, scale: 1 });
+  const [input, setInput]             = useState("");
+  const [busy, setBusy]               = useState(false);
+  const [transform, setTransform]     = useState({ x: 0, y: 0, scale: 1 });
+  // 5. Animation state
+  const [newNodeIds, setNewNodeIds]   = useState(new Set());
+  // 7. Edit mode state
+  const [editMode, setEditMode]       = useState(false);
+  const [editTarget, setEditTarget]   = useState(null); // { id, x, y }
 
-  const svgRef       = useRef(null);
-  const gRef         = useRef(null);
-  const logRef       = useRef(null);
-  const dragging     = useRef(null);
-  const treeRef      = useRef(tree);
-  const posRef       = useRef({});
-  const transformRef = useRef({ x: 0, y: 0, scale: 1 });
+  const svgRef        = useRef(null);
+  const gRef          = useRef(null);
+  const logRef        = useRef(null);
+  const dragging      = useRef(null);
+  const treeRef       = useRef(tree);
+  const posRef        = useRef({});
+  const transformRef  = useRef({ x: 0, y: 0, scale: 1 });
+  const editModeRef   = useRef(false);
   useEffect(() => { treeRef.current = tree; }, [tree]);
   useEffect(() => { posRef.current = pos; }, [pos]);
+  useEffect(() => { editModeRef.current = editMode; }, [editMode]);
 
   const applyTransform = (t) => {
     transformRef.current = t;
@@ -254,6 +261,7 @@ export default function MindMap() {
     setTimeout(() => { if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight; }, 30);
   }, []);
 
+  // FIX 2: newTransform computed inside setPos callback, applied outside
   useEffect(() => {
     const svg = svgRef.current; if (!svg) return;
     const { width: W, height: H } = svg.getBoundingClientRect();
@@ -336,12 +344,20 @@ export default function MindMap() {
         while (el && el !== svg) {
           if (el.dataset && el.dataset.nodeid) {
             const nid = el.dataset.nodeid;
+            // 7. EDIT MODE: show menu instead of drag
+            if (editModeRef.current) {
+              const rect = svg.getBoundingClientRect();
+              setEditTarget({ id: nid, x: e.clientX - rect.left, y: e.clientY - rect.top });
+              return;
+            }
             const p = posRef.current[nid] || { x: 0, y: 0 };
             nodeDrag = { id: nid, ox: p.x, oy: p.y, sx: e.clientX, sy: e.clientY };
             return;
           }
           el = el.parentElement;
         }
+        // Close edit menu on background tap
+        if (editModeRef.current) { setEditTarget(null); return; }
         const t = transformRef.current;
         panStart = { ox: t.x, oy: t.y, sx: e.clientX, sy: e.clientY };
         lastMid  = null;
@@ -425,7 +441,6 @@ export default function MindMap() {
     };
   }, []);
 
-  // FIX 1+2: ????? ????? + ?????????? ?????? ?????
   const edges = [];
   if (tree.goal) {
     const rp = pos["ROOT"];
@@ -450,11 +465,30 @@ export default function MindMap() {
     }
   });
 
+  // 6. SAVE function
+  const saveMap = useCallback(async () => {
+    if (!tree.nodes.length) return;
+    try {
+      const res = await fetch("/api/save", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tree, pos })
+      });
+      const data = await res.json();
+      const slug = data.slug;
+      const url = window.location.origin + "/view/" + slug;
+      lg("o", "✓ сохранено: /view/" + slug);
+      try { await navigator.clipboard.writeText(url); } catch(e) {}
+    } catch(e) {
+      lg("e", "ERR save: " + e.message);
+    }
+  }, [tree, pos, lg]);
+
   const process = useCallback(async val => {
     val = val.trim(); if (!val) return;
     if (val === "/clear") {
       setTree({ goal: "", nodes: [] }); setPos({});
-      setLog([{ c: "s", t: "\u002d \u043e\u0447\u0438\u0449\u0435\u043d\u043e \u002d" }]); return;
+      setLog([{ c: "s", t: "- очищено -" }]); return;
     }
     if (val === "/mock") {
       const mock = {
@@ -466,7 +500,7 @@ export default function MindMap() {
           { id: "n5", title: "autoposting",       note: "Automatic Instagram publishing via Meta API for audience growth",     type: "idea",       confidence: "medium", parentId: "n3" },
           { id: "n6", title: "algo risk",   note: "Meta may restrict API or reduce reach with automated posting",  type: "risk",       confidence: "high",   parentId: "n5" },
           { id: "n7", title: "validation",          note: "Landing page and waitlist to validate demand before SaaS development",            type: "step",       confidence: "high",   parentId: "n3" },
-          { id: "n8", title: "Figma ? Gumroad",   note: "Selling UI kits as alternative when main SaaS grows slowly",        type: "alternative",confidence: "medium", parentId: "n4" }
+          { id: "n8", title: "Figma → Gumroad",   note: "Selling UI kits as alternative when main SaaS grows slowly",        type: "alternative",confidence: "medium", parentId: "n4" }
         ]
       };
       setTree(mock); setPos({});
@@ -474,21 +508,33 @@ export default function MindMap() {
     }
     if (busy) return;
     setBusy(true);
-    lg("u", "? " + trunc(val, 60));
+    lg("u", "▸ " + trunc(val, 60));
     lg("s", "строю карту…");
     try {
       const updated = await fetchMap(val, treeRef.current);
+      // 5. Compute fresh IDs before setTree for animation
+      const prevIds = new Set(treeRef.current.nodes.map(n => n.id));
+      const fresh = updated.nodes
+        .filter(n => !prevIds.has(n.id))
+        .map(n => ({ ...n, title: n.title || smartTitle(n.note) }));
+
       setTree(prev => {
         const goal = updated.goal || prev.goal;
         const ids  = new Set(prev.nodes.map(n => n.id));
-        const fresh = updated.nodes
-          .filter(n => !ids.has(n.id))
-          .map(n => ({ ...n, title: n.title || smartTitle(n.note) }));
-        const merged = [...prev.nodes, ...fresh];
+        const freshFiltered = fresh.filter(n => !ids.has(n.id));
+        const merged = [...prev.nodes, ...freshFiltered];
         if (!goal && merged.length) return { goal: merged[0].title, nodes: merged };
         return { goal, nodes: merged };
       });
-      lg("o", "\u2713 \u0433\u043e\u0442\u043e\u0432\u043e");
+
+      // 5. Set animation for new nodes, clear after 600ms
+      const freshIds = fresh.map(n => n.id);
+      if (freshIds.length > 0) {
+        setNewNodeIds(new Set(freshIds));
+        setTimeout(() => setNewNodeIds(new Set()), 600);
+      }
+
+      lg("o", "✓ готово");
     } catch (e) {
       lg("e", "ERR: " + e.message);
       console.error("Full error:", e);
@@ -500,19 +546,63 @@ export default function MindMap() {
   const send = () => { if (!input.trim() || busy) return; const v = input; setInput(""); process(v); };
   const logColor = { s: "rgba(0,255,136,0.6)", u: "#00ccee", e: "#ff5566", o: "#00ff88" };
 
+  // Edit menu button style
+  const editBtnStyle = {
+    background: "#0a1a0a",
+    border: "1px solid #1e4428",
+    color: "rgba(0,255,136,0.9)",
+    fontFamily: "'Courier New',monospace",
+    fontSize: 10,
+    padding: "3px 8px",
+    cursor: "pointer",
+    letterSpacing: 1,
+    borderRadius: 3
+  };
+
   return (
     <div style={{ background: "#090909", color: "#00ff88", fontFamily: "'Courier New',monospace", height: "100dvh", display: "flex", flexDirection: "column", overflow: "hidden" }}>
+      {/* 8. HEADER: MIND MAP · EDIT · SAVE · nodes count · busy — NO FIT */}
       <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "7px 14px", borderBottom: "1px solid #1e4428", flexShrink: 0 }}>
         <span style={{ fontSize: 10, color: "rgba(0,255,136,0.55)", letterSpacing: 4 }}>MIND MAP</span>
+        {/* 7. EDIT button */}
+        <button
+          onClick={() => { setEditMode(m => !m); setEditTarget(null); }}
+          style={{
+            background: editMode ? "rgba(0,255,136,0.15)" : "transparent",
+            border: editMode ? "1px solid rgba(0,255,136,0.9)" : "1px solid rgba(0,255,136,0.35)",
+            color: editMode ? "#00ff88" : "rgba(0,255,136,0.6)",
+            fontFamily: "'Courier New',monospace",
+            fontSize: 9,
+            padding: "2px 8px",
+            cursor: "pointer",
+            letterSpacing: 2
+          }}>
+          EDIT
+        </button>
+        {/* 6. SAVE button */}
+        <button
+          onClick={saveMap}
+          disabled={!tree.nodes.length}
+          style={{
+            background: "transparent",
+            border: "1px solid rgba(0,255,136,0.35)",
+            color: tree.nodes.length ? "rgba(0,255,136,0.6)" : "rgba(0,255,136,0.2)",
+            fontFamily: "'Courier New',monospace",
+            fontSize: 9,
+            padding: "2px 8px",
+            cursor: tree.nodes.length ? "pointer" : "not-allowed",
+            letterSpacing: 2
+          }}>
+          SAVE
+        </button>
         <span style={{ fontSize: 10, color: "#44aa66", marginLeft: "auto" }}>{tree.nodes.length} nodes</span>
         {busy && <span style={{ fontSize: 10, color: "#ffdd44", animation: "blink 0.5s step-end infinite" }}>...</span>}
-        <button onClick={fit} style={{ background: "transparent", border: "1px solid rgba(0,255,136,0.45)", color: "rgba(0,255,136,0.85)", fontFamily: "'Courier New',monospace", fontSize: 9, padding: "2px 8px", cursor: "pointer", letterSpacing: 2 }}>FIT</button>
       </div>
 
       <div style={{ flex: 1, overflow: "hidden", position: "relative" }}>
         <svg
           ref={svgRef}
-          style={{ width: "100%", height: "100%", position: "absolute", inset: 0, cursor: "grab", touchAction: "none" }}
+          style={{ width: "100%", height: "100%", position: "absolute", inset: 0, cursor: editMode ? "crosshair" : "grab", touchAction: "none" }}
         >
           <defs>
             <marker id="arr" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="5" markerHeight="5" orient="auto">
@@ -525,7 +615,6 @@ export default function MindMap() {
           <rect width="100%" height="100%" fill="url(#dots)" />
 
           <g ref={gRef} style={{ transform: `translate(${transform.x}px,${transform.y}px) scale(${transform.scale})`, willChange: "transform", transformOrigin: "0 0" }}>
-            {/* FIX 2: ?????????? ?????? ????? ? ?????????????? ? ???????????? */}
             {edges.map(e => {
               const isH = Math.abs(e.tx - e.sx) >= Math.abs(e.ty - e.sy);
               const mx = (e.sx + e.tx) / 2, my = (e.sy + e.ty) / 2;
@@ -557,16 +646,18 @@ export default function MindMap() {
               const titleLines = wrapText(n.title || "", TITLE_MAX_CHARS);
               const noteLines  = wrapText(n.note  || "", NOTE_MAX_CHARS);
               const TOP        = -nh / 2;
+              // 5. Animation for new nodes
+              const isNew      = newNodeIds.has(n.id);
 
               let curY = TOP + PAD_TOP + TITLE_LH * 0.82;
 
               return (
                 <g key={n.id} transform={`translate(${p.x},${p.y})`}
-                  style={{ cursor: "grab" }}
+                  style={{ cursor: editMode ? "pointer" : "grab", ...(isNew ? { animation: "nodeIn 0.3s ease-out" } : {}) }}
                   data-nodeid={n.id}>
 
                   <rect x={-NW / 2} y={TOP} width={NW} height={nh} rx={6}
-                    fill={fill} stroke={stroke} strokeWidth={1.5}
+                    fill={fill} stroke={editMode ? "rgba(0,255,136,0.6)" : stroke} strokeWidth={editMode ? 2 : 1.5}
                     strokeDasharray={dash} opacity={n.confidence === "low" ? 0.72 : 1} />
 
                   {titleLines.map((line, li) => (
@@ -618,6 +709,51 @@ export default function MindMap() {
           </g>
         </svg>
 
+        {/* 7. EDIT MENU overlay */}
+        {editTarget && (
+          <div style={{
+            position: "absolute",
+            left: Math.min(editTarget.x, (svgRef.current?.clientWidth || 400) - 160),
+            top: Math.min(editTarget.y, (svgRef.current?.clientHeight || 300) - 60),
+            background: "#0a1a0a",
+            border: "1px solid #1e4428",
+            borderRadius: 6,
+            padding: "6px 8px",
+            display: "flex",
+            gap: 6,
+            zIndex: 100,
+            boxShadow: "0 4px 16px rgba(0,0,0,0.8)"
+          }}>
+            <button onClick={() => {
+              // DEL: remove node, children go to its parent
+              const nodeToDelete = treeRef.current.nodes.find(n => n.id === editTarget.id);
+              if (nodeToDelete) {
+                const parentId = nodeToDelete.parentId;
+                setTree(prev => ({
+                  ...prev,
+                  nodes: prev.nodes
+                    .filter(n => n.id !== editTarget.id)
+                    .map(n => n.parentId === editTarget.id ? { ...n, parentId } : n)
+                }));
+                setPos(prev => { const p = { ...prev }; delete p[editTarget.id]; return p; });
+              }
+              setEditTarget(null);
+            }} style={editBtnStyle}>DEL</button>
+            <button onClick={() => {
+              const node = treeRef.current.nodes.find(n => n.id === editTarget.id);
+              const newNote = prompt("Редактировать заметку:", node?.note || "");
+              if (newNote !== null) {
+                setTree(prev => ({
+                  ...prev,
+                  nodes: prev.nodes.map(n => n.id === editTarget.id ? { ...n, note: newNote } : n)
+                }));
+              }
+              setEditTarget(null);
+            }} style={editBtnStyle}>NOTE</button>
+            <button onClick={() => setEditTarget(null)} style={editBtnStyle}>✕</button>
+          </div>
+        )}
+
         <div style={{ position: "absolute", top: 10, right: 12, display: "flex", flexDirection: "column", gap: 4 }}>
           {Object.entries(TSTROKE).map(([t, c]) => (
             <div key={t} style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 9, opacity: 0.75, color: "#00ff88", letterSpacing: 1 }}>
@@ -627,13 +763,20 @@ export default function MindMap() {
           ))}
         </div>
 
+        {/* 8. ZOOM PANEL: ＋ · － · FIT (all 26x26px) */}
         <div style={{ position: "absolute", bottom: 10, right: 12, display: "flex", flexDirection: "column", gap: 3 }}>
+          {/* FIX 1: zoom buttons update DOM via applyTransform + setTransform */}
           {[["\uFF0B", 1.25], ["\uFF0D", 0.8]].map(([lbl, f]) => (
-            <button key={lbl} onClick={() => { const t = transformRef.current; const ns = Math.min(5, Math.max(0.05, t.scale * f)); const s = { ...t, scale: ns }; applyTransform(s); setTransform(s); }}
+            <button key={lbl}
+              onClick={() => { const t = transformRef.current; const ns = Math.min(5, Math.max(0.05, t.scale * f)); const s = {...t, scale: ns}; applyTransform(s); setTransform(s); }}
               style={{ width: 26, height: 26, background: "#0a120a", border: "1px solid #1e4428", color: "rgba(0,255,136,0.8)", fontSize: 14, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
               {lbl}
             </button>
           ))}
+          <button onClick={fit}
+            style={{ width: 26, height: 26, background: "#0a120a", border: "1px solid #1e4428", color: "rgba(0,255,136,0.8)", fontFamily: "'Courier New',monospace", fontSize: 7, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", letterSpacing: 1 }}>
+            FIT
+          </button>
         </div>
       </div>
 
@@ -644,7 +787,7 @@ export default function MindMap() {
       </div>
 
       <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 14px calc(8px + env(safe-area-inset-bottom)) 14px", borderTop: "1px solid #1e4428", background: "#060d06", flexShrink: 0 }}>
-        <span style={{ color: "rgba(0,255,136,0.6)", fontSize: 14 }}>?</span>
+        <span style={{ color: "rgba(0,255,136,0.6)", fontSize: 14 }}>▸</span>
         <input
           value={input}
           onChange={e => setInput(e.target.value)}
@@ -654,11 +797,15 @@ export default function MindMap() {
         />
         <button onClick={send} disabled={busy || !input.trim()}
           style={{ background: "transparent", border: "1px solid rgba(0,255,136,0.5)", color: busy ? "rgba(0,255,136,0.25)" : "rgba(0,255,136,0.9)", fontFamily: "'Courier New',monospace", fontSize: 10, padding: "4px 12px", cursor: busy ? "not-allowed" : "pointer", letterSpacing: 2, whiteSpace: "nowrap" }}>
-          {busy ? "?" : "SEND"}
+          {busy ? "…" : "SEND"}
         </button>
       </div>
 
-      <style>{"@keyframes blink{0%,100%{opacity:1}50%{opacity:0}}"}</style>
+      {/* 5. nodeIn animation + blink */}
+      <style>{`
+        @keyframes blink{0%,100%{opacity:1}50%{opacity:0}}
+        @keyframes nodeIn{from{opacity:0;transform:scale(0.6)}to{opacity:1;transform:scale(1)}}
+      `}</style>
     </div>
   );
 }
