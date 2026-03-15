@@ -610,7 +610,7 @@ export default function MindMap() {
         </div>
 
         <div style={{ position: "absolute", bottom: 10, right: 12, display: "flex", flexDirection: "column", gap: 3 }}>
-          {[["?", 1.25], ["?", 0.8]].map(([lbl, f]) => (
+          {[["\uFF0B", 1.25], ["\uFF0D", 0.8]].map(([lbl, f]) => (
             <button key={lbl} onClick={() => setTransform(t => ({ ...t, scale: Math.min(5, Math.max(0.05, t.scale * f)) }))}
               style={{ width: 26, height: 26, background: "#0a120a", border: "1px solid #1e4428", color: "rgba(0,255,136,0.8)", fontSize: 14, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
               {lbl}
