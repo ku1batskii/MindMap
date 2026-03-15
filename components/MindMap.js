@@ -205,7 +205,7 @@ export default function MindMap() {
   const [tree, setTree]           = useState({ goal: "", nodes: [] });
   const [pos, setPos]             = useState({});
   const [log, setLog]             = useState([
-    { c: "s", t: "MIND MAP -- \u0432\u0432\u0435\u0434\u0438 \u0442\u0435\u043a\u0441\u0442 \u0432\u043d\u0438\u0437\u0443" },
+    { c: "s", t: "MIND MAP -- введи текст внизу" },
     { c: "s", t: "/mock -- \u0442\u0435\u0441\u0442 \u00b7 /clear -- \u0441\u0431\u0440\u043e\u0441" }
   ]);
   const [input, setInput]         = useState("");
@@ -457,7 +457,7 @@ export default function MindMap() {
     if (busy) return;
     setBusy(true);
     lg("u", "? " + trunc(val, 60));
-    lg("s", "\u0441\u0442\u0440\u043e\u044e \u043a\u0430\u0440\u0442\u0443\u2026");
+    lg("s", "строю карту…");
     try {
       const updated = await fetchMap(val, treeRef.current);
       setTree(prev => {
@@ -631,7 +631,7 @@ export default function MindMap() {
           value={input}
           onChange={e => setInput(e.target.value)}
           onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
-          placeholder="insert text or idea..."
+          placeholder="вставь текст или идею…"
           style={{ flex: 1, background: "transparent", border: "none", outline: "none", color: "#00ff88", fontFamily: "'Courier New',monospace", fontSize: 13, caretColor: "#00ff88" }}
         />
         <button onClick={send} disabled={busy || !input.trim()}
