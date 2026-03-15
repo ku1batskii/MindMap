@@ -7,17 +7,17 @@ const TCOLOR  = {idea:"#33eeff",subgoal:"#00ffaa",step:"#aaccaa",risk:"#ff4477",
 const NW = 180;          // node width px
 const RW = 210, RH = 52;
 
-const TITLE_MAX_CHARS = 17;  // title line ? bold 11px mono, fits ~17 chars safely
-const NOTE_MAX_CHARS  = 21;  // note line  ? 10px mono, fits ~21 chars safely
+const TITLE_MAX_CHARS = 17;
+const NOTE_MAX_CHARS  = 21;
 
 const PAD_TOP  = 9;
 const PAD_BOT  = 8;
-const TITLE_LH = 16;  // title line height px
-const DIV_GAP  = 5;   // gap before divider
-const DIV_H    = 1;   // divider height
-const NOTE_GAP = 6;   // gap after divider before first note line
-const NOTE_LH  = 13;  // note line height px
-const BADGE_H  = 14;  // bottom badge row
+const TITLE_LH = 16;
+const DIV_GAP  = 5;
+const DIV_H    = 1;
+const NOTE_GAP = 6;
+const NOTE_LH  = 13;
+const BADGE_H  = 14;
 
 function wrapText(text, maxChars) {
   const words = (text || "").split(" ");
@@ -45,7 +45,7 @@ function nodeHeight(title, note) {
 }
 
 function uid() { return "n" + (Date.now() % 1e9) + "_" + Math.floor(Math.random() * 999); }
-function trunc(s, n) { return s && s.length > n ? s.slice(0, n) + "…" : s || ""; }
+function trunc(s, n) { return s && s.length > n ? s.slice(0, n) + "вЂ¦" : s || ""; }
 
 function fallback(input, existing) {
   const base = existing.length;
@@ -73,7 +73,6 @@ async function fetchMap(input, tree) {
     nodes: tree.nodes.map(n => ({ id: n.id, title: n.title, note: n.note, type: n.type, parentId: n.parentId }))
   };
 
-  // -- Step 1: extract ideas and notes --------------------------------------
   const prompt1 =
     "Return ONLY raw JSON, no markdown, no backticks.\n" +
     'Schema: {"goal":"string","nodes":[{"id":"n1","note":"1-2 sentences","type":"idea|subgoal|step|risk|alternative","confidence":"high|medium|low","parentId":null}]}\n' +
@@ -110,7 +109,6 @@ async function fetchMap(input, tree) {
     parentId:   n.parentId || null
   }));
 
-  // -- Step 2: generate titles for new nodes only ----------------------------
   const newNodes = p.nodes.filter(n => !tree.nodes.find(e => e.id === n.id));
 
   if (newNodes.length > 0) {
@@ -142,7 +140,6 @@ async function fetchMap(input, tree) {
     }
   }
 
-  // Restore titles of existing nodes
   tree.nodes.forEach(old => {
     const found = p.nodes.find(n => n.id === old.id);
     if (found) found.title = old.title;
@@ -151,6 +148,19 @@ async function fetchMap(input, tree) {
   return p;
 }
 
+// FIX 1: Smart anchor вЂ” Р»РёРЅРёСЏ РєСЂРµРїРёС‚СЃСЏ Рє Р±Р»РёР¶Р°Р№С€РµР№ СЃС‚РѕСЂРѕРЅРµ РЅРѕРґР°
+function smartAnchor(px, py, ph, cx, cy, ch) {
+  const dx = cx - px, dy = cy - py;
+  let sx, sy, tx, ty;
+  if (Math.abs(dx) >= Math.abs(dy)) {
+    sx = dx >= 0 ? px + NW/2 : px - NW/2; sy = py;
+    tx = dx >= 0 ? cx - NW/2 : cx + NW/2; ty = cy;
+  } else {
+    sx = px; sy = dy >= 0 ? py + ph/2 : py - ph/2;
+    tx = cx; ty = dy >= 0 ? cy - ch/2 : cy + ch/2;
+  }
+  return { sx, sy, tx, ty };
+}
 
 function computeLayout(tree, pos, W, H) {
   const next = { ...pos };
@@ -166,7 +176,8 @@ function computeLayout(tree, pos, W, H) {
   orphans.forEach((id, i) => {
     if (next[id]) return;
     const a = (i / Math.max(orphans.length, 1)) * Math.PI * 2 - Math.PI / 2;
-    const r = Math.max(230, orphans.length * 40);
+    // FIX 3: СѓРІРµР»РёС‡РµРЅ СЂР°РґРёСѓСЃ вЂ” РЅРѕРґС‹ РґР°Р»СЊС€Рµ РґСЂСѓРі РѕС‚ РґСЂСѓРіР°
+    const r = Math.max(300, orphans.length * 60);
     next[id] = { x: cx + r * Math.cos(a), y: cy + 80 + r * 0.6 * Math.sin(a) };
   });
 
@@ -180,7 +191,8 @@ function computeLayout(tree, pos, W, H) {
       const pNode = tree.nodes.find(n => n.id === pid);
       const pnh = nodeHeight(pNode ? pNode.title : "", pNode ? pNode.note : "");
       kids.forEach((kid, i) => {
-        if (!next[kid]) next[kid] = { x: pp.x + (i - (kids.length - 1) / 2) * 210, y: pp.y + pnh / 2 + 80 + depth * 4 };
+        // FIX 3: СѓРІРµР»РёС‡РµРЅС‹ РѕС‚СЃС‚СѓРїС‹ РјРµР¶РґСѓ РґРѕС‡РµСЂРЅРёРјРё РЅРѕРґР°РјРё
+        if (!next[kid]) next[kid] = { x: pp.x + (i - (kids.length - 1) / 2) * 240, y: pp.y + pnh / 2 + 110 + depth * 4 };
         if (!visited[kid]) { visited[kid] = true; nq.push(kid); }
       });
     });
@@ -193,31 +205,29 @@ export default function MindMap() {
   const [tree, setTree]           = useState({ goal: "", nodes: [] });
   const [pos, setPos]             = useState({});
   const [log, setLog]             = useState([
-    { c: "s", t: "MIND MAP -- введи текст внизу" },
-    { c: "s", t: "/mock -- тест · /clear -- сброс" }
+    { c: "s", t: "MIND MAP -- РІРІРµРґРё С‚РµРєСЃС‚ РІРЅРёР·Сѓ" },
+    { c: "s", t: "/mock -- С‚РµСЃС‚ В· /clear -- СЃР±СЂРѕСЃ" }
   ]);
   const [input, setInput]         = useState("");
   const [busy, setBusy]           = useState(false);
   const [transform, setTransform] = useState({ x: 0, y: 0, scale: 1 });
 
-  const svgRef      = useRef(null);
-  const gRef        = useRef(null);   // the inner <g> we transform directly
-  const logRef      = useRef(null);
-  const dragging    = useRef(null);
-  const treeRef     = useRef(tree);
-  const posRef      = useRef({});
-  const transformRef = useRef({ x: 0, y: 0, scale: 1 }); // live value, no re-render
+  const svgRef       = useRef(null);
+  const gRef         = useRef(null);
+  const logRef       = useRef(null);
+  const dragging     = useRef(null);
+  const treeRef      = useRef(tree);
+  const posRef       = useRef({});
+  const transformRef = useRef({ x: 0, y: 0, scale: 1 });
   useEffect(() => { treeRef.current = tree; }, [tree]);
   useEffect(() => { posRef.current = pos; }, [pos]);
 
-  // Apply transform via CSS - runs on compositor thread (GPU), no layout cost
   const applyTransform = (t) => {
     transformRef.current = t;
     if (gRef.current)
       gRef.current.style.transform = `translate(${t.x}px,${t.y}px) scale(${t.scale})`;
   };
 
-  // Flush ref value into React state (called on gesture end / fit / tree change)
   const flushTransform = (t) => {
     applyTransform(t);
     setTransform(t);
@@ -262,7 +272,6 @@ export default function MindMap() {
     });
   }, []);
 
-  // -- Wheel zoom (desktop) --------------------------------------------------
   useEffect(() => {
     const svg = svgRef.current; if (!svg) return;
     const onWheel = e => {
@@ -280,12 +289,9 @@ export default function MindMap() {
     return () => svg.removeEventListener("wheel", onWheel);
   }, []);
 
-  // -- Unified pointer handler (mouse + touch via Pointer Events API) ---------
-  // Tracks up to 2 active pointers. 1 pointer = pan. 2 pointers = pinch+pan.
-  // All transforms go direct to DOM - React state only updated on last pointerup.
   useEffect(() => {
     const svg = svgRef.current; if (!svg) return;
-    const pointers = new Map(); // pointerId ? {x, y}
+    const pointers = new Map();
 
     const midpoint = () => {
       const pts = [...pointers.values()];
@@ -299,29 +305,25 @@ export default function MindMap() {
 
     let lastMid  = null;
     let lastDist = null;
-    let panStart = null; // {ox, oy, sx, sy} for single-finger pan
-
-    let nodeDrag = null; // {id, ox, oy, sx, sy}
+    let panStart = null;
+    let nodeDrag = null;
 
     const onDown = e => {
       e.preventDefault();
       svg.setPointerCapture(e.pointerId);
       pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
 
-      // Check if finger landed on a node (walk up DOM tree)
       if (pointers.size === 1) {
         let el = e.target;
         while (el && el !== svg) {
           if (el.dataset && el.dataset.nodeid) {
             const nid = el.dataset.nodeid;
-            // Get current position from pos state via posRef
             const p = posRef.current[nid] || { x: 0, y: 0 };
             nodeDrag = { id: nid, ox: p.x, oy: p.y, sx: e.clientX, sy: e.clientY };
             return;
           }
           el = el.parentElement;
         }
-        // Canvas pan
         const t = transformRef.current;
         panStart = { ox: t.x, oy: t.y, sx: e.clientX, sy: e.clientY };
         lastMid  = null;
@@ -340,20 +342,17 @@ export default function MindMap() {
       pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
 
       if (pointers.size === 1 && nodeDrag) {
-        // Node drag - capture nodeDrag snapshot before async setPos
         const drag = nodeDrag;
         const dx = e.clientX - drag.sx;
         const dy = e.clientY - drag.sy;
         setPos(p => ({ ...p, [drag.id]: { x: drag.ox + dx, y: drag.oy + dy } }));
 
       } else if (pointers.size === 1 && panStart) {
-        // Single finger - pan only
         const dx = e.clientX - panStart.sx;
         const dy = e.clientY - panStart.sy;
         applyTransform({ ...transformRef.current, x: panStart.ox + dx, y: panStart.oy + dy });
 
       } else if (pointers.size === 2 && lastMid && lastDist) {
-        // Two fingers - pinch zoom + pan simultaneously
         const t    = transformRef.current;
         const m    = midpoint();
         const d    = pinchDist();
@@ -380,7 +379,6 @@ export default function MindMap() {
       pointers.delete(e.pointerId);
 
       if (pointers.size === 1) {
-        // Dropped to 1 finger - reset pan anchor from current position
         const [remainId, remainPos] = [...pointers.entries()][0];
         const t = transformRef.current;
         panStart = { ox: t.x, oy: t.y, sx: remainPos.x, sy: remainPos.y };
@@ -389,7 +387,6 @@ export default function MindMap() {
       }
 
       if (pointers.size === 0) {
-        // All fingers lifted - flush final position to React state once
         flushTransform(transformRef.current);
         nodeDrag = null;
         panStart = null;
@@ -410,41 +407,48 @@ export default function MindMap() {
     };
   }, []);
 
+  // FIX 1+2: СѓРјРЅС‹Рµ СЏРєРѕСЂСЏ + Р°РґР°РїС‚РёРІРЅС‹Рµ РєСЂРёРІС‹Рµ Р‘РµР·СЊРµ
   const edges = [];
   if (tree.goal) {
     const rp = pos["ROOT"];
     tree.nodes.filter(n => !n.parentId).forEach(n => {
       const p = pos[n.id];
-      const nh = nodeHeight(n.note);
-      if (rp && p) edges.push({ id: "r-" + n.id, sx: rp.x, sy: rp.y + RH / 2, tx: p.x, ty: p.y - nh / 2 });
+      const nh = nodeHeight(n.title, n.note);
+      if (rp && p) {
+        const a = smartAnchor(rp.x, rp.y, RH, p.x, p.y, nh);
+        edges.push({ id: "r-" + n.id, ...a });
+      }
     });
   }
   tree.nodes.forEach(n => {
     if (!n.parentId) return;
     const pp = pos[n.parentId], cp = pos[n.id];
     const pNode = tree.nodes.find(x => x.id === n.parentId);
-    const pnh = nodeHeight(pNode ? pNode.title : "", pNode ? pNode.note : "");
-    const cnh = nodeHeight(n.note);
-    if (pp && cp) edges.push({ id: n.parentId + "-" + n.id, sx: pp.x, sy: pp.y + pnh / 2, tx: cp.x, ty: cp.y - cnh / 2 });
+    const pnh = nodeHeight(pNode?.title, pNode?.note);
+    const cnh = nodeHeight(n.title, n.note);
+    if (pp && cp) {
+      const a = smartAnchor(pp.x, pp.y, pnh, cp.x, cp.y, cnh);
+      edges.push({ id: n.parentId + "-" + n.id, ...a });
+    }
   });
 
   const process = useCallback(async val => {
     val = val.trim(); if (!val) return;
     if (val === "/clear") {
       setTree({ goal: "", nodes: [] }); setPos({});
-      setLog([{ c: "s", t: "- очищено -" }]); return;
+      setLog([{ c: "s", t: "- РѕС‡РёС‰РµРЅРѕ -" }]); return;
     }
     if (val === "/mock") {
       const mock = {
         goal: "ContentOS SaaS", nodes: [
-          { id: "n1", title: "три потока",       note: "Агентство, SaaS и цифровые продукты как три независимых источника дохода",     type: "subgoal",    confidence: "high",   parentId: null },
-          { id: "n2", title: "агентство",         note: "Быстрый кэшфлоу через клиентские проекты, фундамент для реинвестиций",         type: "step",       confidence: "high",   parentId: "n1" },
-          { id: "n3", title: "SaaS масштаб",      note: "Платформа ContentOS с подписной моделью, MRR растёт без линейных затрат",      type: "step",       confidence: "high",   parentId: "n1" },
-          { id: "n4", title: "цифровые продукты", note: "Шаблоны, курсы и ресурсы -- пассивный доход через Gumroad и маркетплейсы",     type: "step",       confidence: "medium", parentId: "n1" },
-          { id: "n5", title: "автопостинг",       note: "Автоматическая публикация в Instagram через API Meta для роста аудитории",     type: "idea",       confidence: "medium", parentId: "n3" },
-          { id: "n6", title: "риск алгоритмов",   note: "Meta может ограничить API или снизить охват при автоматизированном постинге",  type: "risk",       confidence: "high",   parentId: "n5" },
-          { id: "n7", title: "валидация",          note: "Лендинг и waitlist для проверки спроса до начала разработки SaaS",            type: "step",       confidence: "high",   parentId: "n3" },
-          { id: "n8", title: "Figma → Gumroad",   note: "Продажа UI-китов как альтернатива при медленном росте основного SaaS",        type: "alternative",confidence: "medium", parentId: "n4" }
+          { id: "n1", title: "С‚СЂРё РїРѕС‚РѕРєР°",       note: "РђРіРµРЅС‚СЃС‚РІРѕ, SaaS Рё С†РёС„СЂРѕРІС‹Рµ РїСЂРѕРґСѓРєС‚С‹ РєР°Рє С‚СЂРё РЅРµР·Р°РІРёСЃРёРјС‹С… РёСЃС‚РѕС‡РЅРёРєР° РґРѕС…РѕРґР°",     type: "subgoal",    confidence: "high",   parentId: null },
+          { id: "n2", title: "Р°РіРµРЅС‚СЃС‚РІРѕ",         note: "Р‘С‹СЃС‚СЂС‹Р№ РєСЌС€С„Р»РѕСѓ С‡РµСЂРµР· РєР»РёРµРЅС‚СЃРєРёРµ РїСЂРѕРµРєС‚С‹, С„СѓРЅРґР°РјРµРЅС‚ РґР»СЏ СЂРµРёРЅРІРµСЃС‚РёС†РёР№",         type: "step",       confidence: "high",   parentId: "n1" },
+          { id: "n3", title: "SaaS РјР°СЃС€С‚Р°Р±",      note: "РџР»Р°С‚С„РѕСЂРјР° ContentOS СЃ РїРѕРґРїРёСЃРЅРѕР№ РјРѕРґРµР»СЊСЋ, MRR СЂР°СЃС‚С‘С‚ Р±РµР· Р»РёРЅРµР№РЅС‹С… Р·Р°С‚СЂР°С‚",      type: "step",       confidence: "high",   parentId: "n1" },
+          { id: "n4", title: "С†РёС„СЂРѕРІС‹Рµ РїСЂРѕРґСѓРєС‚С‹", note: "РЁР°Р±Р»РѕРЅС‹, РєСѓСЂСЃС‹ Рё СЂРµСЃСѓСЂСЃС‹ -- РїР°СЃСЃРёРІРЅС‹Р№ РґРѕС…РѕРґ С‡РµСЂРµР· Gumroad Рё РјР°СЂРєРµС‚РїР»РµР№СЃС‹",     type: "step",       confidence: "medium", parentId: "n1" },
+          { id: "n5", title: "Р°РІС‚РѕРїРѕСЃС‚РёРЅРі",       note: "РђРІС‚РѕРјР°С‚РёС‡РµСЃРєР°СЏ РїСѓР±Р»РёРєР°С†РёСЏ РІ Instagram С‡РµСЂРµР· API Meta РґР»СЏ СЂРѕСЃС‚Р° Р°СѓРґРёС‚РѕСЂРёРё",     type: "idea",       confidence: "medium", parentId: "n3" },
+          { id: "n6", title: "СЂРёСЃРє Р°Р»РіРѕСЂРёС‚РјРѕРІ",   note: "Meta РјРѕР¶РµС‚ РѕРіСЂР°РЅРёС‡РёС‚СЊ API РёР»Рё СЃРЅРёР·РёС‚СЊ РѕС…РІР°С‚ РїСЂРё Р°РІС‚РѕРјР°С‚РёР·РёСЂРѕРІР°РЅРЅРѕРј РїРѕСЃС‚РёРЅРіРµ",  type: "risk",       confidence: "high",   parentId: "n5" },
+          { id: "n7", title: "РІР°Р»РёРґР°С†РёСЏ",          note: "Р›РµРЅРґРёРЅРі Рё waitlist РґР»СЏ РїСЂРѕРІРµСЂРєРё СЃРїСЂРѕСЃР° РґРѕ РЅР°С‡Р°Р»Р° СЂР°Р·СЂР°Р±РѕС‚РєРё SaaS",            type: "step",       confidence: "high",   parentId: "n3" },
+          { id: "n8", title: "Figma в†’ Gumroad",   note: "РџСЂРѕРґР°Р¶Р° UI-РєРёС‚РѕРІ РєР°Рє Р°Р»СЊС‚РµСЂРЅР°С‚РёРІР° РїСЂРё РјРµРґР»РµРЅРЅРѕРј СЂРѕСЃС‚Рµ РѕСЃРЅРѕРІРЅРѕРіРѕ SaaS",        type: "alternative",confidence: "medium", parentId: "n4" }
         ]
       };
       setTree(mock); setPos({});
@@ -452,8 +456,8 @@ export default function MindMap() {
     }
     if (busy) return;
     setBusy(true);
-    lg("u", "› " + trunc(val, 60));
-    lg("s", "строю карту…");
+    lg("u", "вЂє " + trunc(val, 60));
+    lg("s", "СЃС‚СЂРѕСЋ РєР°СЂС‚СѓвЂ¦");
     try {
       const updated = await fetchMap(val, treeRef.current);
       setTree(prev => {
@@ -466,7 +470,7 @@ export default function MindMap() {
         if (!goal && merged.length) return { goal: merged[0].title, nodes: merged };
         return { goal, nodes: merged };
       });
-      lg("o", "✓ готово");
+      lg("o", "вњ“ РіРѕС‚РѕРІРѕ");
     } catch (e) {
       lg("e", "ERR: " + e.message);
       console.error("Full error:", e);
@@ -503,9 +507,14 @@ export default function MindMap() {
           <rect width="100%" height="100%" fill="url(#dots)" />
 
           <g ref={gRef} style={{ transform: `translate(${transform.x}px,${transform.y}px) scale(${transform.scale})`, willChange: "transform", transformOrigin: "0 0" }}>
+            {/* FIX 2: Р°РґР°РїС‚РёРІРЅС‹Рµ РєСЂРёРІС‹Рµ Р‘РµР·СЊРµ вЂ” РіРѕСЂРёР·РѕРЅС‚Р°Р»СЊРЅС‹Рµ Рё РІРµСЂС‚РёРєР°Р»СЊРЅС‹Рµ */}
             {edges.map(e => {
-              const my = (e.sy + e.ty) / 2;
-              return <path key={e.id} d={`M${e.sx},${e.sy} C${e.sx},${my} ${e.tx},${my} ${e.tx},${e.ty}`}
+              const isH = Math.abs(e.tx - e.sx) >= Math.abs(e.ty - e.sy);
+              const mx = (e.sx + e.tx) / 2, my = (e.sy + e.ty) / 2;
+              const d = isH
+                ? `M${e.sx},${e.sy} C${mx},${e.sy} ${mx},${e.ty} ${e.tx},${e.ty}`
+                : `M${e.sx},${e.sy} C${e.sx},${my} ${e.tx},${my} ${e.tx},${e.ty}`;
+              return <path key={e.id} d={d}
                 fill="none" stroke="rgba(0,220,100,0.35)" strokeWidth="1.5" markerEnd="url(#arr)" />;
             })}
 
@@ -531,8 +540,7 @@ export default function MindMap() {
               const noteLines  = wrapText(n.note  || "", NOTE_MAX_CHARS);
               const TOP        = -nh / 2;
 
-              // Build Y positions top-to-bottom
-              let curY = TOP + PAD_TOP + TITLE_LH * 0.82; // first title baseline
+              let curY = TOP + PAD_TOP + TITLE_LH * 0.82;
 
               return (
                 <g key={n.id} transform={`translate(${p.x},${p.y})`}
@@ -543,7 +551,6 @@ export default function MindMap() {
                     fill={fill} stroke={stroke} strokeWidth={1.5}
                     strokeDasharray={dash} opacity={n.confidence === "low" ? 0.72 : 1} />
 
-                  {/* Title -- wrapped, bold */}
                   {titleLines.map((line, li) => (
                     <text key={"t" + li}
                       x={-NW / 2 + 10} y={curY + li * TITLE_LH}
@@ -554,7 +561,6 @@ export default function MindMap() {
                     </text>
                   ))}
 
-                  {/* Divider */}
                   {noteLines.length > 0 && (() => {
                     const divY = TOP + PAD_TOP + titleLines.length * TITLE_LH + DIV_GAP;
                     return (
@@ -563,7 +569,6 @@ export default function MindMap() {
                     );
                   })()}
 
-                  {/* Note lines */}
                   {noteLines.map((line, li) => {
                     const divY   = TOP + PAD_TOP + titleLines.length * TITLE_LH + DIV_GAP + DIV_H;
                     const noteY0 = divY + NOTE_GAP + NOTE_LH * 0.82;
@@ -578,7 +583,6 @@ export default function MindMap() {
                     );
                   })}
 
-                  {/* Type badge */}
                   <text textAnchor="start" x={-NW / 2 + 8} y={nh / 2 - 3}
                     fill={stroke} fontSize={7} opacity={0.4} letterSpacing={1}
                     fontFamily="'Courier New',monospace"
@@ -586,7 +590,6 @@ export default function MindMap() {
                     {n.type.toUpperCase()}
                   </text>
 
-                  {/* Confidence dot */}
                   <circle cx={NW / 2 - 10} cy={nh / 2 - 6} r={2.5}
                     fill={n.confidence === "high" ? stroke : "none"}
                     stroke={stroke} strokeWidth={1} opacity={0.45}
@@ -607,7 +610,7 @@ export default function MindMap() {
         </div>
 
         <div style={{ position: "absolute", bottom: 10, right: 12, display: "flex", flexDirection: "column", gap: 3 }}>
-          {[["＋", 1.25], ["－", 0.8]].map(([lbl, f]) => (
+          {[["пј‹", 1.25], ["пјЌ", 0.8]].map(([lbl, f]) => (
             <button key={lbl} onClick={() => setTransform(t => ({ ...t, scale: Math.min(5, Math.max(0.05, t.scale * f)) }))}
               style={{ width: 26, height: 26, background: "#0a120a", border: "1px solid #1e4428", color: "rgba(0,255,136,0.8)", fontSize: 14, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
               {lbl}
@@ -623,17 +626,17 @@ export default function MindMap() {
       </div>
 
       <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 14px calc(8px + env(safe-area-inset-bottom)) 14px", borderTop: "1px solid #1e4428", background: "#060d06", flexShrink: 0 }}>
-        <span style={{ color: "rgba(0,255,136,0.6)", fontSize: 14 }}>›</span>
+        <span style={{ color: "rgba(0,255,136,0.6)", fontSize: 14 }}>вЂє</span>
         <input
           value={input}
           onChange={e => setInput(e.target.value)}
           onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
-          placeholder="вставь текст или идею…"
+          placeholder="РІСЃС‚Р°РІСЊ С‚РµРєСЃС‚ РёР»Рё РёРґРµСЋвЂ¦"
           style={{ flex: 1, background: "transparent", border: "none", outline: "none", color: "#00ff88", fontFamily: "'Courier New',monospace", fontSize: 13, caretColor: "#00ff88" }}
         />
         <button onClick={send} disabled={busy || !input.trim()}
           style={{ background: "transparent", border: "1px solid rgba(0,255,136,0.5)", color: busy ? "rgba(0,255,136,0.25)" : "rgba(0,255,136,0.9)", fontFamily: "'Courier New',monospace", fontSize: 10, padding: "4px 12px", cursor: busy ? "not-allowed" : "pointer", letterSpacing: 2, whiteSpace: "nowrap" }}>
-          {busy ? "…" : "SEND"}
+          {busy ? "вЂ¦" : "SEND"}
         </button>
       </div>
 
