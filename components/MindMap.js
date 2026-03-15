@@ -1,3 +1,5 @@
+import CLIENT_CONFIG from '../config.js';
+
 import { useState, useEffect, useRef, useCallback } from "react";
 
 const TFILL   = {idea:"#002a38",subgoal:"#00210f",step:"#181e18",risk:"#280010",alternative:"#160028"};
@@ -77,7 +79,7 @@ async function fetchMap(input, tree) {
     "Return ONLY raw JSON, no markdown, no backticks.\n" +
     'Schema: {"goal":"string","nodes":[{"id":"n1","note":"1-2 sentences","type":"idea|subgoal|step|risk|alternative","confidence":"high|medium|low","parentId":null}]}\n' +
     "Rules: Extract 4-10 distinct ideas. note=clear summary of this idea 1-2 sentences. " +
-    "Keep existing nodes. New IDs from n" + (maxN+1) + ". parentId refs existing id or null. Same language as input.\n" +
+    CLIENT_CONFIG.systemContext + " Keep existing nodes. New IDs from n" + (maxN+1) + ". parentId refs existing id or null. Same language as input.\n" +
     "Existing: " + JSON.stringify(compact) + "\nInput: " + input;
 
   const res1 = await fetch("/api/ai", {
@@ -631,7 +633,7 @@ export default function MindMap() {
           value={input}
           onChange={e => setInput(e.target.value)}
           onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
-          placeholder="вставь текст или идею…"
+          placeholder={CLIENT_CONFIG.placeholder}
           style={{ flex: 1, background: "transparent", border: "none", outline: "none", color: "#00ff88", fontFamily: "'Courier New',monospace", fontSize: 13, caretColor: "#00ff88" }}
         />
         <button onClick={send} disabled={busy || !input.trim()}
