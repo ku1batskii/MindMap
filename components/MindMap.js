@@ -631,7 +631,7 @@ export default function MindMap() {
           value={input}
           onChange={e => setInput(e.target.value)}
           onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
-          placeholder="?????? ????? ??? ?????"
+          placeholder="insert text or idea..."
           style={{ flex: 1, background: "transparent", border: "none", outline: "none", color: "#00ff88", fontFamily: "'Courier New',monospace", fontSize: 13, caretColor: "#00ff88" }}
         />
         <button onClick={send} disabled={busy || !input.trim()}
