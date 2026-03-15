@@ -31,7 +31,7 @@ function wrapText(text, maxChars) {
     else { if (cur) lines.push(cur); cur = word; }
   }
   if (cur) lines.push(cur);
-  return lines;
+  return lines.map(line => line.length > maxChars ? line.slice(0, maxChars) + "-" : line);
 }
 
 function nodeHeight(title, note) {
@@ -56,7 +56,7 @@ function fallback(input, existing) {
   return {
     goal: input.slice(0, 50),
     nodes: src.map((l, i) => ({
-      id: "n" + (base + i + 1),
+      id: uid(),
       title: l.split(" ").slice(0, 3).join(" "),
       note: l,
       type: "idea", confidence: "medium", parentId: null
@@ -258,6 +258,7 @@ export default function MindMap() {
     const svg = svgRef.current; if (!svg) return;
     const { width: W, height: H } = svg.getBoundingClientRect();
     const w = W || 600, h = H || 400;
+    let newTransform = null;
     setPos(prev => {
       const next = computeLayout(tree, prev, w, h);
       const pts = Object.values(next);
@@ -267,10 +268,11 @@ export default function MindMap() {
         const x0 = Math.min(...xs) - pad, x1 = Math.max(...xs) + pad;
         const y0 = Math.min(...ys) - pad, y1 = Math.max(...ys) + pad;
         const sc = Math.min(w / (x1 - x0), h / (y1 - y0), 1.4, 2);
-        flushTransform({ x: w / 2 - sc * (x0 + x1) / 2, y: h / 2 - sc * (y0 + y1) / 2, scale: sc });
+        newTransform = { x: w / 2 - sc * (x0 + x1) / 2, y: h / 2 - sc * (y0 + y1) / 2, scale: sc };
       }
       return next;
     });
+    if (newTransform) flushTransform(newTransform);
   }, [tree]);
 
   const fit = useCallback(() => {
@@ -627,7 +629,7 @@ export default function MindMap() {
 
         <div style={{ position: "absolute", bottom: 10, right: 12, display: "flex", flexDirection: "column", gap: 3 }}>
           {[["\uFF0B", 1.25], ["\uFF0D", 0.8]].map(([lbl, f]) => (
-            <button key={lbl} onClick={() => setTransform(t => ({ ...t, scale: Math.min(5, Math.max(0.05, t.scale * f)) }))}
+            <button key={lbl} onClick={() => { const t = transformRef.current; const ns = Math.min(5, Math.max(0.05, t.scale * f)); const s = { ...t, scale: ns }; applyTransform(s); setTransform(s); }}
               style={{ width: 26, height: 26, background: "#0a120a", border: "1px solid #1e4428", color: "rgba(0,255,136,0.8)", fontSize: 14, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
               {lbl}
             </button>
