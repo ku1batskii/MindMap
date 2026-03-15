@@ -45,7 +45,7 @@ function nodeHeight(title, note) {
 }
 
 function uid() { return "n" + (Date.now() % 1e9) + "_" + Math.floor(Math.random() * 999); }
-function trunc(s, n) { return s && s.length > n ? s.slice(0, n) + "вЂ¦" : s || ""; }
+function trunc(s, n) { return s && s.length > n ? s.slice(0, n) + "…" : s || ""; }
 
 function fallback(input, existing) {
   const base = existing.length;
@@ -148,7 +148,7 @@ async function fetchMap(input, tree) {
   return p;
 }
 
-// FIX 1: Smart anchor вЂ” Р»РёРЅРёСЏ РєСЂРµРїРёС‚СЃСЏ Рє Р±Р»РёР¶Р°Р№С€РµР№ СЃС‚РѕСЂРѕРЅРµ РЅРѕРґР°
+// FIX 1: Smart anchor — линия крепится к ближайшей стороне нода
 function smartAnchor(px, py, ph, cx, cy, ch) {
   const dx = cx - px, dy = cy - py;
   let sx, sy, tx, ty;
@@ -176,7 +176,7 @@ function computeLayout(tree, pos, W, H) {
   orphans.forEach((id, i) => {
     if (next[id]) return;
     const a = (i / Math.max(orphans.length, 1)) * Math.PI * 2 - Math.PI / 2;
-    // FIX 3: СѓРІРµР»РёС‡РµРЅ СЂР°РґРёСѓСЃ вЂ” РЅРѕРґС‹ РґР°Р»СЊС€Рµ РґСЂСѓРі РѕС‚ РґСЂСѓРіР°
+    // FIX 3: увеличен радиус — ноды дальше друг от друга
     const r = Math.max(300, orphans.length * 60);
     next[id] = { x: cx + r * Math.cos(a), y: cy + 80 + r * 0.6 * Math.sin(a) };
   });
@@ -191,7 +191,7 @@ function computeLayout(tree, pos, W, H) {
       const pNode = tree.nodes.find(n => n.id === pid);
       const pnh = nodeHeight(pNode ? pNode.title : "", pNode ? pNode.note : "");
       kids.forEach((kid, i) => {
-        // FIX 3: СѓРІРµР»РёС‡РµРЅС‹ РѕС‚СЃС‚СѓРїС‹ РјРµР¶РґСѓ РґРѕС‡РµСЂРЅРёРјРё РЅРѕРґР°РјРё
+        // FIX 3: увеличены отступы между дочерними нодами
         if (!next[kid]) next[kid] = { x: pp.x + (i - (kids.length - 1) / 2) * 240, y: pp.y + pnh / 2 + 110 + depth * 4 };
         if (!visited[kid]) { visited[kid] = true; nq.push(kid); }
       });
@@ -205,8 +205,8 @@ export default function MindMap() {
   const [tree, setTree]           = useState({ goal: "", nodes: [] });
   const [pos, setPos]             = useState({});
   const [log, setLog]             = useState([
-    { c: "s", t: "MIND MAP -- РІРІРµРґРё С‚РµРєСЃС‚ РІРЅРёР·Сѓ" },
-    { c: "s", t: "/mock -- С‚РµСЃС‚ В· /clear -- СЃР±СЂРѕСЃ" }
+    { c: "s", t: "MIND MAP -- введи текст внизу" },
+    { c: "s", t: "/mock -- тест · /clear -- сброс" }
   ]);
   const [input, setInput]         = useState("");
   const [busy, setBusy]           = useState(false);
@@ -407,7 +407,7 @@ export default function MindMap() {
     };
   }, []);
 
-  // FIX 1+2: СѓРјРЅС‹Рµ СЏРєРѕСЂСЏ + Р°РґР°РїС‚РёРІРЅС‹Рµ РєСЂРёРІС‹Рµ Р‘РµР·СЊРµ
+  // FIX 1+2: умные якоря + адаптивные кривые Безье
   const edges = [];
   if (tree.goal) {
     const rp = pos["ROOT"];
@@ -436,19 +436,19 @@ export default function MindMap() {
     val = val.trim(); if (!val) return;
     if (val === "/clear") {
       setTree({ goal: "", nodes: [] }); setPos({});
-      setLog([{ c: "s", t: "- РѕС‡РёС‰РµРЅРѕ -" }]); return;
+      setLog([{ c: "s", t: "- очищено -" }]); return;
     }
     if (val === "/mock") {
       const mock = {
         goal: "ContentOS SaaS", nodes: [
-          { id: "n1", title: "С‚СЂРё РїРѕС‚РѕРєР°",       note: "РђРіРµРЅС‚СЃС‚РІРѕ, SaaS Рё С†РёС„СЂРѕРІС‹Рµ РїСЂРѕРґСѓРєС‚С‹ РєР°Рє С‚СЂРё РЅРµР·Р°РІРёСЃРёРјС‹С… РёСЃС‚РѕС‡РЅРёРєР° РґРѕС…РѕРґР°",     type: "subgoal",    confidence: "high",   parentId: null },
-          { id: "n2", title: "Р°РіРµРЅС‚СЃС‚РІРѕ",         note: "Р‘С‹СЃС‚СЂС‹Р№ РєСЌС€С„Р»РѕСѓ С‡РµСЂРµР· РєР»РёРµРЅС‚СЃРєРёРµ РїСЂРѕРµРєС‚С‹, С„СѓРЅРґР°РјРµРЅС‚ РґР»СЏ СЂРµРёРЅРІРµСЃС‚РёС†РёР№",         type: "step",       confidence: "high",   parentId: "n1" },
-          { id: "n3", title: "SaaS РјР°СЃС€С‚Р°Р±",      note: "РџР»Р°С‚С„РѕСЂРјР° ContentOS СЃ РїРѕРґРїРёСЃРЅРѕР№ РјРѕРґРµР»СЊСЋ, MRR СЂР°СЃС‚С‘С‚ Р±РµР· Р»РёРЅРµР№РЅС‹С… Р·Р°С‚СЂР°С‚",      type: "step",       confidence: "high",   parentId: "n1" },
-          { id: "n4", title: "С†РёС„СЂРѕРІС‹Рµ РїСЂРѕРґСѓРєС‚С‹", note: "РЁР°Р±Р»РѕРЅС‹, РєСѓСЂСЃС‹ Рё СЂРµСЃСѓСЂСЃС‹ -- РїР°СЃСЃРёРІРЅС‹Р№ РґРѕС…РѕРґ С‡РµСЂРµР· Gumroad Рё РјР°СЂРєРµС‚РїР»РµР№СЃС‹",     type: "step",       confidence: "medium", parentId: "n1" },
-          { id: "n5", title: "Р°РІС‚РѕРїРѕСЃС‚РёРЅРі",       note: "РђРІС‚РѕРјР°С‚РёС‡РµСЃРєР°СЏ РїСѓР±Р»РёРєР°С†РёСЏ РІ Instagram С‡РµСЂРµР· API Meta РґР»СЏ СЂРѕСЃС‚Р° Р°СѓРґРёС‚РѕСЂРёРё",     type: "idea",       confidence: "medium", parentId: "n3" },
-          { id: "n6", title: "СЂРёСЃРє Р°Р»РіРѕСЂРёС‚РјРѕРІ",   note: "Meta РјРѕР¶РµС‚ РѕРіСЂР°РЅРёС‡РёС‚СЊ API РёР»Рё СЃРЅРёР·РёС‚СЊ РѕС…РІР°С‚ РїСЂРё Р°РІС‚РѕРјР°С‚РёР·РёСЂРѕРІР°РЅРЅРѕРј РїРѕСЃС‚РёРЅРіРµ",  type: "risk",       confidence: "high",   parentId: "n5" },
-          { id: "n7", title: "РІР°Р»РёРґР°С†РёСЏ",          note: "Р›РµРЅРґРёРЅРі Рё waitlist РґР»СЏ РїСЂРѕРІРµСЂРєРё СЃРїСЂРѕСЃР° РґРѕ РЅР°С‡Р°Р»Р° СЂР°Р·СЂР°Р±РѕС‚РєРё SaaS",            type: "step",       confidence: "high",   parentId: "n3" },
-          { id: "n8", title: "Figma в†’ Gumroad",   note: "РџСЂРѕРґР°Р¶Р° UI-РєРёС‚РѕРІ РєР°Рє Р°Р»СЊС‚РµСЂРЅР°С‚РёРІР° РїСЂРё РјРµРґР»РµРЅРЅРѕРј СЂРѕСЃС‚Рµ РѕСЃРЅРѕРІРЅРѕРіРѕ SaaS",        type: "alternative",confidence: "medium", parentId: "n4" }
+          { id: "n1", title: "три потока",       note: "Агентство, SaaS и цифровые продукты как три независимых источника дохода",     type: "subgoal",    confidence: "high",   parentId: null },
+          { id: "n2", title: "агентство",         note: "Быстрый кэшфлоу через клиентские проекты, фундамент для реинвестиций",         type: "step",       confidence: "high",   parentId: "n1" },
+          { id: "n3", title: "SaaS масштаб",      note: "Платформа ContentOS с подписной моделью, MRR растёт без линейных затрат",      type: "step",       confidence: "high",   parentId: "n1" },
+          { id: "n4", title: "цифровые продукты", note: "Шаблоны, курсы и ресурсы -- пассивный доход через Gumroad и маркетплейсы",     type: "step",       confidence: "medium", parentId: "n1" },
+          { id: "n5", title: "автопостинг",       note: "Автоматическая публикация в Instagram через API Meta для роста аудитории",     type: "idea",       confidence: "medium", parentId: "n3" },
+          { id: "n6", title: "риск алгоритмов",   note: "Meta может ограничить API или снизить охват при автоматизированном постинге",  type: "risk",       confidence: "high",   parentId: "n5" },
+          { id: "n7", title: "валидация",          note: "Лендинг и waitlist для проверки спроса до начала разработки SaaS",            type: "step",       confidence: "high",   parentId: "n3" },
+          { id: "n8", title: "Figma → Gumroad",   note: "Продажа UI-китов как альтернатива при медленном росте основного SaaS",        type: "alternative",confidence: "medium", parentId: "n4" }
         ]
       };
       setTree(mock); setPos({});
@@ -456,8 +456,8 @@ export default function MindMap() {
     }
     if (busy) return;
     setBusy(true);
-    lg("u", "вЂє " + trunc(val, 60));
-    lg("s", "СЃС‚СЂРѕСЋ РєР°СЂС‚СѓвЂ¦");
+    lg("u", "› " + trunc(val, 60));
+    lg("s", "строю карту…");
     try {
       const updated = await fetchMap(val, treeRef.current);
       setTree(prev => {
@@ -470,7 +470,7 @@ export default function MindMap() {
         if (!goal && merged.length) return { goal: merged[0].title, nodes: merged };
         return { goal, nodes: merged };
       });
-      lg("o", "вњ“ РіРѕС‚РѕРІРѕ");
+      lg("o", "✓ готово");
     } catch (e) {
       lg("e", "ERR: " + e.message);
       console.error("Full error:", e);
@@ -507,7 +507,7 @@ export default function MindMap() {
           <rect width="100%" height="100%" fill="url(#dots)" />
 
           <g ref={gRef} style={{ transform: `translate(${transform.x}px,${transform.y}px) scale(${transform.scale})`, willChange: "transform", transformOrigin: "0 0" }}>
-            {/* FIX 2: Р°РґР°РїС‚РёРІРЅС‹Рµ РєСЂРёРІС‹Рµ Р‘РµР·СЊРµ вЂ” РіРѕСЂРёР·РѕРЅС‚Р°Р»СЊРЅС‹Рµ Рё РІРµСЂС‚РёРєР°Р»СЊРЅС‹Рµ */}
+            {/* FIX 2: адаптивные кривые Безье — горизонтальные и вертикальные */}
             {edges.map(e => {
               const isH = Math.abs(e.tx - e.sx) >= Math.abs(e.ty - e.sy);
               const mx = (e.sx + e.tx) / 2, my = (e.sy + e.ty) / 2;
@@ -610,7 +610,7 @@ export default function MindMap() {
         </div>
 
         <div style={{ position: "absolute", bottom: 10, right: 12, display: "flex", flexDirection: "column", gap: 3 }}>
-          {[["пј‹", 1.25], ["пјЌ", 0.8]].map(([lbl, f]) => (
+          {[["＋", 1.25], ["－", 0.8]].map(([lbl, f]) => (
             <button key={lbl} onClick={() => setTransform(t => ({ ...t, scale: Math.min(5, Math.max(0.05, t.scale * f)) }))}
               style={{ width: 26, height: 26, background: "#0a120a", border: "1px solid #1e4428", color: "rgba(0,255,136,0.8)", fontSize: 14, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
               {lbl}
@@ -626,17 +626,17 @@ export default function MindMap() {
       </div>
 
       <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 14px calc(8px + env(safe-area-inset-bottom)) 14px", borderTop: "1px solid #1e4428", background: "#060d06", flexShrink: 0 }}>
-        <span style={{ color: "rgba(0,255,136,0.6)", fontSize: 14 }}>вЂє</span>
+        <span style={{ color: "rgba(0,255,136,0.6)", fontSize: 14 }}>›</span>
         <input
           value={input}
           onChange={e => setInput(e.target.value)}
           onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
-          placeholder="РІСЃС‚Р°РІСЊ С‚РµРєСЃС‚ РёР»Рё РёРґРµСЋвЂ¦"
+          placeholder="вставь текст или идею…"
           style={{ flex: 1, background: "transparent", border: "none", outline: "none", color: "#00ff88", fontFamily: "'Courier New',monospace", fontSize: 13, caretColor: "#00ff88" }}
         />
         <button onClick={send} disabled={busy || !input.trim()}
           style={{ background: "transparent", border: "1px solid rgba(0,255,136,0.5)", color: busy ? "rgba(0,255,136,0.25)" : "rgba(0,255,136,0.9)", fontFamily: "'Courier New',monospace", fontSize: 10, padding: "4px 12px", cursor: busy ? "not-allowed" : "pointer", letterSpacing: 2, whiteSpace: "nowrap" }}>
-          {busy ? "вЂ¦" : "SEND"}
+          {busy ? "…" : "SEND"}
         </button>
       </div>
 
