@@ -123,14 +123,14 @@ async function fetchMap(input, tree) {
   if (newNodes.length > 0) {
     const notesList = newNodes.map((n, i) => (i+1) + ". " + n.note).join("\n");
     const prompt2 =
-      "For each numbered note, write a 2-3 word title that captures the CORE THEME.\n" +
+      "For each numbered note, write a UNIQUE 2-3 word title. NEVER repeat a title that already exists in the map.\n" +
       "Rules:\n" +
       "- The title must be a thematic label, like a newspaper headline or book chapter.\n" +
       "- NEVER use the first words of the note as the title.\n" +
       "- Think: what is the TOPIC of this note? Name the topic, not the content.\n" +
       "- Return ONLY a JSON array of strings, one per note, same order. No markdown.\n" +
       "- Same language as the notes.\n\n" +
-      "Notes:\n" + notesList;
+      "Already used titles (DO NOT repeat): " + tree.nodes.filter(n => n.title).map(n => n.title).join(", ") + "\n\nNotes:\n" + notesList;
 
     try {
       const res2 = await fetch("/api/ai", {
