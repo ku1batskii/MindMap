@@ -534,6 +534,7 @@ export default function MindMap() {
         setTimeout(() => setNewNodeIds(new Set()), 600);
       }
 
+      setLog(l => l.filter(item => item.c !== "b"));
       lg("o", "✓ готово");
     } catch (e) {
       lg("e", "ERR: " + e.message);
@@ -564,38 +565,11 @@ export default function MindMap() {
       {/* 8. HEADER: MIND MAP · EDIT · SAVE · nodes count · busy — NO FIT */}
       <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "7px 14px", borderBottom: "1px solid #1e4428", flexShrink: 0 }}>
         <span style={{ fontSize: 10, color: "rgba(0,255,136,0.55)", letterSpacing: 4 }}>MIND MAP</span>
-        {/* 7. EDIT button */}
-        <button
-          onClick={() => { setEditMode(m => !m); setEditTarget(null); }}
-          style={{
-            background: editMode ? "rgba(0,255,136,0.15)" : "transparent",
-            border: editMode ? "1px solid rgba(0,255,136,0.9)" : "1px solid rgba(0,255,136,0.35)",
-            color: editMode ? "#00ff88" : "rgba(0,255,136,0.6)",
-            fontFamily: "'Courier New',monospace",
-            fontSize: 9,
-            padding: "2px 8px",
-            cursor: "pointer",
-            letterSpacing: 2
-          }}>
-          EDIT
-        </button>
-        {/* 6. SAVE button */}
-        <button
-          onClick={saveMap}
-          disabled={!tree.nodes.length}
-          style={{
-            background: "transparent",
-            border: "1px solid rgba(0,255,136,0.35)",
-            color: tree.nodes.length ? "rgba(0,255,136,0.6)" : "rgba(0,255,136,0.2)",
-            fontFamily: "'Courier New',monospace",
-            fontSize: 9,
-            padding: "2px 8px",
-            cursor: tree.nodes.length ? "pointer" : "not-allowed",
-            letterSpacing: 2
-          }}>
-          SAVE
-        </button>
-        <span style={{ fontSize: 10, color: "#44aa66", marginLeft: "auto" }}>{tree.nodes.length} nodes</span>
+        <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 10 }}>
+          <span style={{ fontSize: 10, color: "#44aa66" }}>{tree.nodes.length} nodes</span>
+          <button onClick={() => setEditMode(m => !m)} style={{ background: "transparent", border: editMode ? "1px solid #00ff88" : "1px solid rgba(0,255,136,0.5)", color: editMode ? "#00ff88" : "rgba(0,255,136,0.9)", fontFamily: "'Courier New',monospace", fontSize: 10, padding: "4px 12px", cursor: "pointer", letterSpacing: 2 }}>EDIT</button>
+          <button onClick={saveMap} disabled={!tree.nodes.length} style={{ background: "transparent", border: "1px solid rgba(0,255,136,0.5)", color: tree.nodes.length ? "rgba(0,255,136,0.9)" : "rgba(0,255,136,0.25)", fontFamily: "'Courier New',monospace", fontSize: 10, padding: "4px 12px", cursor: tree.nodes.length ? "pointer" : "default", letterSpacing: 2 }}>SAVE</button>
+        </div>
       </div>
 
       <div style={{ flex: 1, overflow: "hidden", position: "relative" }}>
