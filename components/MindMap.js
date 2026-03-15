@@ -86,6 +86,13 @@ async function fetchMap(input, tree) {
     "Return ONLY raw JSON, no markdown, no backticks.\n" +
     'Schema: {"goal":"string","nodes":[{"id":"n1","note":"1-2 sentences","type":"idea|subgoal|step|risk|alternative","confidence":"high|medium|low","parentId":null}]}\n' +
     "Rules: Extract 4-10 distinct ideas. note=clear summary of this idea 1-2 sentences. " +
+    "Type rules (STRICT): " +
+    "idea=main concept or opportunity (BLUE). " +
+    "subgoal=goal or desired outcome (GREEN). " +
+    "step=concrete action to take (GRAY). " +
+    "risk=danger, problem, obstacle, threat - use this for ANYTHING negative (RED). " +
+    "alternative=another option or approach (PURPLE). " +
+    "When text mentions risk/риск/проблема/опасность/угроза/может упасть/может не работать - ALWAYS use type=risk. " +
     CLIENT_CONFIG.systemContext + " Keep existing nodes. New IDs from n" + (maxN+1) + ". parentId refs existing id or null. Same language as input.\n" +
     "Existing: " + JSON.stringify(compact) + "\nInput: " + input;
 
