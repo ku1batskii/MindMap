@@ -34,6 +34,15 @@ export default async function handler(req, res) {
 
   // Block oversized requests
   const body = req.body;
+  if (!body?.messages || !Array.isArray(body.messages)) {
+    return res.status(400).json({ error: { message: "Неверный формат." } });
+  }
+  if (body.messages.length > 20) {
+    return res.status(400).json({ error: { message: "Слишком длинная история." } });
+  }
+  if (body.max_tokens && body.max_tokens > 2000) {
+    body.max_tokens = 2000;
+  }
   const bodyStr = JSON.stringify(body);
   if (bodyStr.length > 20000) {
     return res.status(413).json({ error: { message: "Запрос слишком большой." } });
