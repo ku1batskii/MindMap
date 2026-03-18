@@ -331,7 +331,7 @@ export default function MindMap(){
         const dx=e.clientX-drag.sx,dy=e.clientY-drag.sy;
         if(Math.sqrt(dx*dx+dy*dy)>6)drag.moved=true;
         const np={x:drag.ox+dx,y:drag.oy+dy};
-        posRef.current={...posRef.current,[drag.id]:np};
+        posRef.current[drag.id]=np;
         setPos(prev=>({...prev,[drag.id]:np}));
       }else if(ptrs.size===1&&pan){
         const dx=e.clientX-pan.sx,dy=e.clientY-pan.sy;
@@ -571,8 +571,7 @@ export default function MindMap(){
             style={{flex:1,background:dark?"rgba(0,0,0,0.72)":"rgba(255,255,255,0.72)",border:`1px solid ${faint}`,color:dark?"#00ff88":"#003d18",fontFamily:"'Courier New',monospace",fontSize:15,lineHeight:1.65,padding:"16px",outline:"none",resize:"none",caretColor:ac,borderRadius:6}}/>
           <button
             onClick={()=>{if(!inputText.trim()||busy)return;const v=inputText;setInputText("");setView("map");setTimeout(()=>process(v),80);}}
-            disabled={busy||!inputText.trim()}
-            style={{background:"transparent",border:`1px solid ${busy||!inputText.trim()?faint:ac}`,color:busy||!inputText.trim()?faint:(dark?"#00ff88":"#003d18"),fontFamily:"'Courier New',monospace",fontSize:11,padding:"14px",cursor:busy||!inputText.trim()?"not-allowed":"pointer",letterSpacing:3,borderRadius:6,opacity:busy||!inputText.trim()?0.4:1}}>
+            style={{background:"transparent",border:`1px solid ${inputText.trim()&&!busy?ac:"rgba(0,255,136,0.3)"}`,color:inputText.trim()&&!busy?(dark?"#00ff88":"#003d18"):"rgba(0,255,136,0.3)",fontFamily:"'Courier New',monospace",fontSize:11,padding:"14px",cursor:inputText.trim()&&!busy?"pointer":"default",letterSpacing:3,borderRadius:6,pointerEvents:inputText.trim()&&!busy?"all":"none"}}>
             {busy?"ГЕНЕРИРУЮ…":"↳ GENERATE MAP"}
           </button>
         </div>
@@ -628,7 +627,7 @@ export default function MindMap(){
               return(
                 <g key={n.id} transform={`translate(${p.x},${p.y})`} style={{cursor:"grab",...(isNew?{animation:"nodeIn 0.35s ease-out"}:{})}} data-nodeid={n.id}>
                   {isSel&&<rect x={-NW/2-3} y={TOP-3} width={NW+6} height={h+6} rx={7} fill="none" stroke={C.accent} strokeWidth={1.5} opacity={0.5}/>}
-                  <rect x={-NW/2} y={TOP} width={NW} height={h} rx={6} fill={ns.fill} stroke={editMode&&selId===n.id?"rgba(0,255,136,0.7)":ns.stroke} strokeWidth={editMode&&selId===n.id?2:1.5} strokeDasharray={n.confidence==="low"?"4 3":undefined} opacity={n.confidence==="low"?0.75:1}/>
+                  <rect x={-NW/2} y={TOP} width={NW} height={h} rx={6} fill={ns.fill} stroke={ns.stroke} strokeWidth={1.5} strokeDasharray={n.confidence==="low"?"4 3":undefined} opacity={n.confidence==="low"?0.75:1}/>
                   {tl.map((line,li)=><text key={"t"+li} x={-NW/2+9} y={TOP+PAD_TOP+TITLE_LH*0.82+li*TITLE_LH} fill={ns.color} fontSize={11} fontWeight="700" fontFamily="'Courier New',monospace" style={{pointerEvents:"none"}}>{line}</text>)}
                   {nl.length>0&&<line x1={-NW/2+9} y1={TOP+PAD_TOP+tl.length*TITLE_LH+DIV_GAP} x2={NW/2-9} y2={TOP+PAD_TOP+tl.length*TITLE_LH+DIV_GAP} stroke={ns.stroke} strokeWidth={0.5} opacity={0.3}/>}
                   {nl.map((line,li)=>{const dy=TOP+PAD_TOP+tl.length*TITLE_LH+DIV_GAP+DIV_H+NOTE_GAP+NOTE_LH*0.82;return<text key={"n"+li} x={-NW/2+9} y={dy+li*NOTE_LH} fill={ns.color} fontSize={9.5} opacity={dark?0.62:0.75} fontFamily="'Courier New',monospace" style={{pointerEvents:"none"}}>{line}</text>;})}
@@ -672,7 +671,7 @@ export default function MindMap(){
                 <button onClick={fit} style={pb()}>
                   <svg width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24"><path d="M8 3H5a2 2 0 00-2 2v3M21 8V5a2 2 0 00-2-2h-3M16 21h3a2 2 0 002-2v-3M3 16v3a2 2 0 002 2h3"/></svg>
                 </button>
-                <button onClick={()=>{setEditMode(m=>!m);setSelId(null);setEditId(null);}} style={pb(false,editMode)}>
+                <button onClick={()=>{setEditMode(m=>!m);setSelId(null);setEditId(null);}} style={pb()}>
                   <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
                 </button>
                 <div style={{width:1,height:20,background:C.border,margin:"0 3px"}}/>
