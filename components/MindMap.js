@@ -1,3 +1,4 @@
+import usePointerControls from "../hooks/usePointerControls";
 import Node from "./Node";
 import CLIENT_CONFIG from '../config.js';
 import { useState, useEffect, useRef, useCallback } from "react";
