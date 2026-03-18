@@ -413,17 +413,21 @@ useEffect(() => {
     }
   };
 
-  svg.addEventListener("pointerdown", down, { passive: false });
-  svg.addEventListener("pointermove", move, { passive: false });
-  svg.addEventListener("pointerup", up, { passive: false });
-  svg.addEventListener("pointercancel", up, { passive: false });
+  const handlePointerDown = down;
+  const handlePointerMove = move;
+  const handlePointerUp = up;
+
+  svg.addEventListener("pointerdown", handlePointerDown, { passive: false });
+  svg.addEventListener("pointermove", handlePointerMove, { passive: false });
+  svg.addEventListener("pointerup", handlePointerUp, { passive: false });
+  svg.addEventListener("pointercancel", handlePointerUp, { passive: false });
 
   return () => {
-    svg.removeEventListener("pointerdown", down);
-    svg.removeEventListener("pointermove", move);
-    svg.removeEventListener("pointerup", up);
-    svg.removeEventListener("pointercancel", up);
-  };
+  svg.removeEventListener("pointerdown", handlePointerDown);
+  svg.removeEventListener("pointermove", handlePointerMove);
+  svg.removeEventListener("pointerup", handlePointerUp);
+  svg.removeEventListener("pointercancel", handlePointerUp);
+};
 }, [view, applyT, flushT]);
 
 // ── Process ────────────────────────────────────────────────────────────────
