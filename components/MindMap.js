@@ -6,24 +6,21 @@ import MindMapCanvas from "./MindMapCanvas.js";
 import { InputModal, SessionsSidebar, BusyOverlay, RelatedPanel, ReportModal } from "./UIOverlays.js";
 
 export default function MindMap() {
-  const [view, setView]         = useState("input");
+  const [view, setView]           = useState("input");
   const [inputText, setInputText] = useState("");
-  const [theme, setTheme]       = useState("dark");
+  const [theme, setTheme]         = useState("dark");
   const dark = theme === "dark";
   const C  = getTheme(dark);
   const NS = dark ? DARK_STYLE : LIGHT_STYLE;
 
-  // ── Log ─────────────────────────────────────────────────────────────────────
+  // ── Log ──────────────────────────────────────────────────────────────────────
   const [log, setLog] = useState([
     { c:"s", t:"MIND MAP -- введи текст" },
     { c:"s", t:"/mock -- тест · /clear -- сброс" },
   ]);
   const logRef = useRef(null);
-  const onLog = useCallback((c, t) => {
-    if (c === "_clear_busy") {
-      setLog(l => l.filter(i => i.c !== "b"));
-      return;
-    }
+  const onLog  = useCallback((c, t) => {
+    if (c === "_clear_busy") { setLog(l => l.filter(i => i.c !== "b")); return; }
     setLog(l => { const n = [...l, { c, t }]; return n.length > 80 ? n.slice(-80) : n; });
     setTimeout(() => { if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight; }, 30);
   }, []);
@@ -31,18 +28,26 @@ export default function MindMap() {
   // ── Engine ───────────────────────────────────────────────────────────────────
   const engine = useMindMapEngine({ onLog });
 
-  // ── Canvas refs & state ──────────────────────────────────────────────────────
+  // ── Canvas refs ───────────────────────────────────────────────────────────────
   const svgRef = useRef(null);
   const gRef   = useRef(null);
   const [transform, setTransform]   = useState({ x:0, y:0, scale:1 });
   const [pos, setPos]               = useState({});
   const [newNodeIds, setNewNodeIds] = useState(new Set());
-  const [selectedId, setSelectedId] = useState(null);
-  const [editMode, setEditMode]     = useState(false);
-  const [editTarget, setEditTarget] = useState(null);
   const [busyVisible, setBusyVisible] = useState(false);
 
-  // ── Modals ───────────────────────────────────────────────────────────────────
+  // ── Edit mode ─────────────────────────────────────────────────────────────────
+  const [editMode, setEditMode]         = useState(false);
+  const [selectedNodeId, setSelectedNodeId] = useState(null);
+  // Inline text editing
+  const [editingNodeId, setEditingNodeId]   = useState(null);
+  const [editingText, setEditingText]       = useState("");
+  const editInputRef = useRef(null);
+
+  // ── Node nav ──────────────────────────────────────────────────────────────────
+  const [navSelectedId, setNavSelectedId] = useState(null);
+
+  // ── Modals ────────────────────────────────────────────────────────────────────
   const [showSidebar,  setShowSidebar]  = useState(false);
   const [showFollowUp, setShowFollowUp] = useState(false);
   const [followText,   setFollowText]   = useState("");
@@ -51,18 +56,29 @@ export default function MindMap() {
   const [showRelated,  setShowRelated]  = useState(false);
 
   // ── Canvas controls ───────────────────────────────────────────────────────────
+  const editModeRef = useRef(false);
+  useEffect(() => { editModeRef.current = editMode; }, [editMode]);
+
   const { transformRef, posRef, onPosChange, flushTransform } = useCanvasControls({
     svgRef, gRef,
-    onNodeLongPress: target => setEditTarget(target),
+    onNodeTap: useCallback(id => {
+      if (!editModeRef.current) return;
+      if (id === "ROOT") return;
+      setSelectedNodeId(prev => prev === id ? null : id);
+      setEditingNodeId(null);
+    }, []),
+    onBackgroundTap: useCallback(() => {
+      if (!editModeRef.current) return;
+      setSelectedNodeId(null);
+      setEditingNodeId(null);
+    }, []),
   });
 
-  // Wire posChange → setPos
   onPosChange.current = (id, newP) => setPos(p => ({ ...p, [id]: newP }));
 
-  // ── Layout sync ───────────────────────────────────────────────────────────────
+  // ── Layout ────────────────────────────────────────────────────────────────────
   useEffect(() => {
     if (view !== "map") return;
-    // Small delay to ensure SVG is rendered and has real dimensions
     const run = () => {
       const svg = svgRef.current; if (!svg) return;
       const rect = svg.getBoundingClientRect();
@@ -73,7 +89,6 @@ export default function MindMap() {
       setPos(newPos);
       flushTransform(fitAll(newPos, w, h), setTransform);
     };
-    // Try immediately, then retry after paint
     run();
     const id = requestAnimationFrame(run);
     return () => cancelAnimationFrame(id);
@@ -87,7 +102,7 @@ export default function MindMap() {
     flushTransform(fitAll(posRef.current, W, H), setTransform);
   }, [flushTransform, posRef]);
 
-  // ── Node nav ───────────────────────────────────────────────────────────────
+  // ── Node nav ──────────────────────────────────────────────────────────────────
   const getNavOrder = useCallback(() => {
     const order = [], visited = new Set();
     const bfs = ids => {
@@ -107,26 +122,28 @@ export default function MindMap() {
   const focusNode = useCallback(id => {
     const svg = svgRef.current; if (!svg) return;
     const p = posRef.current[id]; if (!p) return;
-    const { width: W, height: H } = svg.getBoundingClientRect();
+    const rect = svg.getBoundingClientRect();
+    const W = rect.width > 10 ? rect.width : window.innerWidth;
+    const H = rect.height > 10 ? rect.height : window.innerHeight - 200;
     const sc = 1.55;
     flushTransform({ x: W/2 - sc*p.x, y: H/2 - sc*p.y, scale: sc }, setTransform);
-    setSelectedId(id);
+    setNavSelectedId(id);
   }, [flushTransform, posRef]);
 
   const navNode = useCallback(dir => {
     const order = getNavOrder(); if (!order.length) return;
-    const cur  = order.indexOf(selectedId);
+    const cur  = order.indexOf(navSelectedId);
     const next = cur === -1 ? (dir > 0 ? 0 : order.length - 1) : (cur + dir + order.length) % order.length;
     focusNode(order[next]);
-  }, [getNavOrder, selectedId, focusNode]);
+  }, [getNavOrder, navSelectedId, focusNode]);
 
-  // ── Busy fade ─────────────────────────────────────────────────────────────────
+  // ── Busy fade ──────────────────────────────────────────────────────────────────
   useEffect(() => {
-    if (engine.busy) { setBusyVisible(true); }
+    if (engine.busy) setBusyVisible(true);
     else { const t = setTimeout(() => setBusyVisible(false), 600); return () => clearTimeout(t); }
   }, [engine.busy]);
 
-  // ── New node animation ────────────────────────────────────────────────────────
+  // ── Process with animation ────────────────────────────────────────────────────
   const processWithAnim = useCallback(async val => {
     const freshIds = await engine.process(val);
     if (freshIds?.length) {
@@ -134,6 +151,23 @@ export default function MindMap() {
       setTimeout(() => setNewNodeIds(new Set()), 600);
     }
   }, [engine]);
+
+  // ── Inline text editing ───────────────────────────────────────────────────────
+  const startEditText = useCallback(() => {
+    if (!selectedNodeId) return;
+    const node = engine.treeRef.current.nodes.find(n => n.id === selectedNodeId);
+    if (!node) return;
+    setEditingText(node.note || "");
+    setEditingNodeId(selectedNodeId);
+    setTimeout(() => editInputRef.current?.focus(), 80);
+  }, [selectedNodeId, engine.treeRef]);
+
+  const commitEditText = useCallback(() => {
+    if (editingNodeId) {
+      engine.editNodeNote(editingNodeId, editingText);
+    }
+    setEditingNodeId(null);
+  }, [editingNodeId, editingText, engine]);
 
   // ── Save / export ─────────────────────────────────────────────────────────────
   const saveMap = useCallback(async () => {
@@ -157,15 +191,27 @@ export default function MindMap() {
   const logColor = { b:"#ffdd44", s:"rgba(0,255,136,0.6)", u:"#00ccee", e:"#ff5566", o:"#00ff88" };
   const TOOLBAR_H = 44;
 
+  // Pill button styles
   const pillBtn = (disabled = false, active = false) => ({
     width:36, height:36, borderRadius:6,
-    background: active ? (dark ? "rgba(0,255,136,0.1)" : "rgba(0,80,30,0.1)") : "none",
+    background: active ? (dark ? "rgba(0,255,136,0.12)" : "rgba(0,80,30,0.1)") : "none",
     border:"none", cursor: disabled ? "default" : "pointer",
     color: disabled ? C.accentFaint : (active ? C.accent : C.accentDim),
     display:"flex", alignItems:"center", justifyContent:"center",
     opacity: disabled ? 0.3 : 1, transition:"all 0.15s", flexShrink:0,
   });
-  const iconBtn = () => ({ width:28, height:28, borderRadius:5, background:"none", border:"none", cursor:"pointer", color:C.accentDim, display:"flex", alignItems:"center", justifyContent:"center" });
+
+  const iconBtn = () => ({
+    width:28, height:28, borderRadius:5, background:"none", border:"none",
+    cursor:"pointer", color:C.accentDim, display:"flex", alignItems:"center", justifyContent:"center",
+  });
+
+  // Toolbar glass container
+  const glassStyle = {
+    background: dark ? "rgba(9,9,9,0.88)" : "rgba(240,247,240,0.88)",
+    backdropFilter:"blur(14px)", WebkitBackdropFilter:"blur(14px)",
+    border:`1px solid ${C.border}`, borderRadius:8,
+  };
 
   // ── INPUT VIEW ────────────────────────────────────────────────────────────────
   if (view === "input") {
@@ -193,13 +239,13 @@ export default function MindMap() {
       {/* Floating top bar */}
       <div style={{ position:"absolute", top:0, left:0, right:0, zIndex:30, display:"flex", alignItems:"flex-start", justifyContent:"space-between", padding:"14px 14px 0", pointerEvents:"none" }}>
         <button onClick={() => setShowSidebar(true)}
-          style={{ width:36, height:36, borderRadius:6, background: dark ? "rgba(9,9,9,0.88)" : "rgba(240,247,240,0.88)", backdropFilter:"blur(10px)", WebkitBackdropFilter:"blur(10px)", border:`1px solid ${C.border}`, color:C.accentDim, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", pointerEvents:"all" }}>
+          style={{ ...glassStyle, width:36, height:36, border:`1px solid ${C.border}`, color:C.accentDim, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", pointerEvents:"all" }}>
           <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
             <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>
           </svg>
         </button>
 
-        <div style={{ display:"flex", gap:1, background: dark ? "rgba(9,9,9,0.88)" : "rgba(240,247,240,0.88)", backdropFilter:"blur(10px)", WebkitBackdropFilter:"blur(10px)", border:`1px solid ${C.border}`, borderRadius:6, padding:"4px 5px", pointerEvents:"all" }}>
+        <div style={{ display:"flex", gap:1, ...glassStyle, padding:"4px 5px", pointerEvents:"all" }}>
           <button onClick={exportSVG} style={iconBtn()}>
             <svg width="12" height="12" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
           </button>
@@ -210,7 +256,8 @@ export default function MindMap() {
           <button onClick={() => setShowReport(true)} style={iconBtn()}>
             <svg width="11" height="11" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
           </button>
-          <button onClick={saveMap} disabled={!engine.tree.nodes.length} style={{ ...iconBtn(), color: engine.tree.nodes.length ? C.accentDim : C.accentFaint, cursor: engine.tree.nodes.length ? "pointer" : "default" }}>
+          <button onClick={saveMap} disabled={!engine.tree.nodes.length}
+            style={{ ...iconBtn(), color: engine.tree.nodes.length ? C.accentDim : C.accentFaint, cursor: engine.tree.nodes.length ? "pointer" : "default" }}>
             <svg width="11" height="11" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><polyline points="17,21 17,13 7,13 7,21"/><polyline points="7,3 7,8 15,8"/></svg>
           </button>
         </div>
@@ -220,48 +267,106 @@ export default function MindMap() {
       <div style={{ flex:1, overflow:"hidden", position:"relative" }}>
         <MindMapCanvas
           svgRef={svgRef} gRef={gRef} transform={transform}
-          tree={engine.tree} pos={pos} newNodeIds={newNodeIds} selectedId={selectedId}
+          tree={engine.tree} pos={pos}
+          newNodeIds={newNodeIds}
+          selectedId={editMode && selectedNodeId ? selectedNodeId : navSelectedId}
           editMode={editMode} dark={dark} C={C} NS={NS}
         />
 
-        {/* Edit context menu */}
-        {editTarget && (
-          <div style={{ position:"absolute", left: Math.min(editTarget.x, (svgRef.current?.clientWidth||400) - 170), top: Math.min(editTarget.y, (svgRef.current?.clientHeight||400) - 70), background:C.cardBg, border:`1px solid ${C.border}`, borderRadius:6, padding:"6px 8px", display:"flex", gap:6, zIndex:100, boxShadow:"0 4px 16px rgba(0,0,0,0.8)" }}>
-            {[
-              ["DEL", () => { engine.deleteNode(editTarget.id); setEditTarget(null); }],
-              ["NOTE", () => { const nd = engine.treeRef.current.nodes.find(n => n.id === editTarget.id); const v = prompt("Редактировать:", nd?.note || ""); if (v !== null) engine.editNodeNote(editTarget.id, v); setEditTarget(null); }],
-              ["✕",   () => setEditTarget(null)],
-            ].map(([lbl, fn]) => (
-              <button key={lbl} onClick={fn} style={{ background:C.cardBg, border:`1px solid ${C.border}`, color:C.accentDim, fontFamily:"'Courier New',monospace", fontSize:10, padding:"4px 10px", cursor:"pointer", letterSpacing:1, borderRadius:4 }}>{lbl}</button>
-            ))}
+        {/* Inline text editor overlay */}
+        {editingNodeId && pos[editingNodeId] && (
+          <div style={{
+            position:"absolute",
+            left: (pos[editingNodeId].x * transform.scale + transform.x) - 79,
+            top:  (pos[editingNodeId].y * transform.scale + transform.y) - 40,
+            width: 158, zIndex:50,
+          }}>
+            <textarea
+              ref={editInputRef}
+              value={editingText}
+              onChange={e => setEditingText(e.target.value)}
+              onBlur={commitEditText}
+              onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); commitEditText(); } if (e.key === "Escape") { setEditingNodeId(null); } }}
+              rows={4}
+              style={{
+                width:"100%", background: dark ? "rgba(10,20,10,0.97)" : "rgba(240,255,240,0.97)",
+                border:`1.5px solid ${C.accent}`, borderRadius:6,
+                color:C.text, fontFamily:"'Courier New',monospace", fontSize:11,
+                padding:"8px", outline:"none", resize:"none",
+                caretColor:C.accent, lineHeight:1.5,
+                boxShadow:`0 0 12px ${C.accent}44`,
+              }}
+            />
           </div>
         )}
 
         {/* Bottom toolbar row */}
-        <div style={{ position:"absolute", bottom:36, left:0, right:0, display:"flex", alignItems:"center", justifyContent:"center", gap:8, paddingLeft:14, paddingRight:14, zIndex:20, pointerEvents:"none" }}>
+        <div style={{
+          position:"absolute", bottom:36, left:0, right:0,
+          display:"flex", alignItems:"center", justifyContent:"center",
+          gap:8, paddingLeft:14, paddingRight:14,
+          zIndex:20, pointerEvents:"none",
+        }}>
           {/* Star */}
-          <button onClick={() => { engine.fetchRelated(); setShowRelated(true); }} title="Related"
-            style={{ width:TOOLBAR_H, height:TOOLBAR_H, borderRadius:8, flexShrink:0, background: dark ? "rgba(9,9,9,0.88)" : "rgba(240,247,240,0.88)", backdropFilter:"blur(14px)", WebkitBackdropFilter:"blur(14px)", border:`1px solid ${C.border}`, color:C.accentDim, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", pointerEvents:"all" }}>
+          <button onClick={() => { engine.fetchRelated(); setShowRelated(true); }}
+            style={{ width:TOOLBAR_H, height:TOOLBAR_H, borderRadius:8, flexShrink:0, ...glassStyle, color:C.accentDim, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", pointerEvents:"all" }}>
             <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
               <polygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26"/>
             </svg>
           </button>
 
-          {/* Pill */}
-          <div style={{ height:TOOLBAR_H, display:"flex", alignItems:"center", gap:0, background: dark ? "rgba(9,9,9,0.88)" : "rgba(240,247,240,0.88)", backdropFilter:"blur(14px)", WebkitBackdropFilter:"blur(14px)", border:`1px solid ${C.border}`, borderRadius:8, padding:"0 8px", pointerEvents:"all" }}>
-            <button onClick={fit} style={pillBtn()}>
-              <svg width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24"><path d="M8 3H5a2 2 0 00-2 2v3M21 8V5a2 2 0 00-2-2h-3M16 21h3a2 2 0 002-2v-3M3 16v3a2 2 0 002 2h3"/></svg>
-            </button>
-            <button onClick={() => setEditMode(m => !m)} style={pillBtn(false, editMode)}>
-              <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-            </button>
-            <div style={{ width:1, height:20, background:C.border, margin:"0 3px" }}/>
-            <button onClick={() => navNode(-1)} style={pillBtn(!engine.tree.nodes.length)}>
-              <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
-            </button>
-            <button onClick={() => navNode(1)} style={pillBtn(!engine.tree.nodes.length)}>
-              <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
-            </button>
+          {/* Pill toolbar */}
+          <div style={{ height:TOOLBAR_H, display:"flex", alignItems:"center", ...glassStyle, padding:"0 8px", pointerEvents:"all" }}>
+
+            {editMode && selectedNodeId ? (
+              /* ── Edit node mode: DEL | T | divider | ← → ── */
+              <>
+                {/* DEL */}
+                <button
+                  onClick={() => { engine.deleteNode(selectedNodeId); setSelectedNodeId(null); }}
+                  style={{ ...pillBtn(), color:"#ff4477" }}
+                  title="Delete node">
+                  <svg width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                    <polyline points="3,6 5,6 21,6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/>
+                  </svg>
+                </button>
+                {/* T — edit text */}
+                <button
+                  onClick={startEditText}
+                  style={pillBtn(false, editingNodeId === selectedNodeId)}
+                  title="Edit text">
+                  <svg width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                    <polyline points="4,7 4,4 20,4 20,7"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/>
+                  </svg>
+                </button>
+                <div style={{ width:1, height:20, background:C.border, margin:"0 3px" }}/>
+                <button onClick={() => navNode(-1)} style={pillBtn(!engine.tree.nodes.length)}>
+                  <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
+                </button>
+                <button onClick={() => navNode(1)} style={pillBtn(!engine.tree.nodes.length)}>
+                  <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                </button>
+              </>
+            ) : (
+              /* ── Normal mode: fit | edit | divider | ← → ── */
+              <>
+                <button onClick={fit} style={pillBtn()}>
+                  <svg width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24"><path d="M8 3H5a2 2 0 00-2 2v3M21 8V5a2 2 0 00-2-2h-3M16 21h3a2 2 0 002-2v-3M3 16v3a2 2 0 002 2h3"/></svg>
+                </button>
+                <button
+                  onClick={() => { setEditMode(m => !m); setSelectedNodeId(null); setEditingNodeId(null); }}
+                  style={pillBtn(false, editMode)}>
+                  <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                </button>
+                <div style={{ width:1, height:20, background:C.border, margin:"0 3px" }}/>
+                <button onClick={() => navNode(-1)} style={pillBtn(!engine.tree.nodes.length)}>
+                  <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
+                </button>
+                <button onClick={() => navNode(1)} style={pillBtn(!engine.tree.nodes.length)}>
+                  <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                </button>
+              </>
+            )}
           </div>
         </div>
 
@@ -279,8 +384,10 @@ export default function MindMap() {
 
       {/* Follow-up bar */}
       <div style={{ display:"flex", alignItems:"center", gap:8, padding:"8px 14px calc(8px + env(safe-area-inset-bottom)) 14px", borderTop:`1px solid ${C.border}`, background:C.bgSub, flexShrink:0 }}>
-        <button onClick={engine.navBack} disabled={!engine.canBack} style={{ background:"transparent", border:"none", color: engine.canBack ? C.accentDim : C.accentFaint, fontSize:18, cursor: engine.canBack ? "pointer" : "default", padding:"0 2px", lineHeight:1 }}>←</button>
-        <button onClick={engine.navForward} disabled={!engine.canFwd} style={{ background:"transparent", border:"none", color: engine.canFwd ? C.accentDim : C.accentFaint, fontSize:18, cursor: engine.canFwd ? "pointer" : "default", padding:"0 2px", lineHeight:1 }}>→</button>
+        <button onClick={engine.navBack} disabled={!engine.canBack}
+          style={{ background:"transparent", border:"none", color: engine.canBack ? C.accentDim : C.accentFaint, fontSize:18, cursor: engine.canBack ? "pointer" : "default", padding:"0 2px", lineHeight:1 }}>←</button>
+        <button onClick={engine.navForward} disabled={!engine.canFwd}
+          style={{ background:"transparent", border:"none", color: engine.canFwd ? C.accentDim : C.accentFaint, fontSize:18, cursor: engine.canFwd ? "pointer" : "default", padding:"0 2px", lineHeight:1 }}>→</button>
         <button onClick={() => { setFollowText(""); setShowFollowUp(true); }}
           style={{ flex:1, background:C.cardBg, border:`1px solid ${C.border}`, color:C.textDim, fontFamily:"'Courier New',monospace", fontSize:13, padding:"10px 12px", cursor:"text", textAlign:"left", outline:"none", borderRadius:4 }}>
           {engine.busy ? "…" : "ask follow-up…"}
