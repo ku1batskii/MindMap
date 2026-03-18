@@ -1,9 +1,9 @@
 import { useEffect, useRef, useCallback } from "react";
 
-export function useCanvasControls({ svgRef, gRef, onNodeLongPress }) {
+export function useCanvasControls({ svgRef, gRef, onNodeTap, onBackgroundTap }) {
   const transformRef = useRef({ x: 0, y: 0, scale: 1 });
   const posRef       = useRef({});
-  const onPosChange  = useRef(null); // callback(newPos)
+  const onPosChange  = useRef(null);
 
   const applyTransform = useCallback(t => {
     transformRef.current = t;
@@ -37,9 +37,6 @@ export function useCanvasControls({ svgRef, gRef, onNodeLongPress }) {
     const mid = () => { const p = [...ptrs.values()]; return { x: (p[0].x + p[1].x) / 2, y: (p[0].y + p[1].y) / 2 }; };
     const pdist = () => { const p = [...ptrs.values()]; const dx = p[0].x - p[1].x, dy = p[0].y - p[1].y; return Math.sqrt(dx * dx + dy * dy); };
     let lastMid = null, lastDist = null, panStart = null, nodeDrag = null;
-    let lpTimer = null, lpNodeId = null;
-
-    const clearLP = () => { if (lpTimer) { clearTimeout(lpTimer); lpTimer = null; } lpNodeId = null; };
 
     const onDown = e => {
       e.preventDefault();
@@ -48,28 +45,21 @@ export function useCanvasControls({ svgRef, gRef, onNodeLongPress }) {
 
       if (ptrs.size === 1) {
         let el = e.target;
+        let foundNode = null;
         while (el && el !== svg) {
-          if (el.dataset?.nodeid) {
-            const nid = el.dataset.nodeid;
-            const p = posRef.current[nid] || { x: 0, y: 0 };
-            nodeDrag = { id: nid, ox: p.x, oy: p.y, sx: e.clientX, sy: e.clientY };
-
-            // Long-press → edit menu
-            lpNodeId = nid;
-            lpTimer = setTimeout(() => {
-              const rect = svg.getBoundingClientRect();
-              onNodeLongPress?.({ id: nid, x: e.clientX - rect.left, y: e.clientY - rect.top });
-              nodeDrag = null;
-            }, 450);
-            return;
-          }
+          if (el.dataset?.nodeid) { foundNode = el.dataset.nodeid; break; }
           el = el.parentElement;
         }
-        const t = transformRef.current;
-        panStart = { ox: t.x, oy: t.y, sx: e.clientX, sy: e.clientY };
-        lastMid = null; lastDist = null;
+        if (foundNode) {
+          const p = posRef.current[foundNode] || { x: 0, y: 0 };
+          nodeDrag = { id: foundNode, ox: p.x, oy: p.y, sx: e.clientX, sy: e.clientY, moved: false };
+        } else {
+          const t = transformRef.current;
+          panStart = { ox: t.x, oy: t.y, sx: e.clientX, sy: e.clientY };
+          lastMid = null; lastDist = null;
+        }
       } else if (ptrs.size === 2) {
-        clearLP(); nodeDrag = null; panStart = null;
+        nodeDrag = null; panStart = null;
         lastMid = mid(); lastDist = pdist();
       }
     };
@@ -81,13 +71,11 @@ export function useCanvasControls({ svgRef, gRef, onNodeLongPress }) {
 
       if (ptrs.size === 1 && nodeDrag) {
         const d = nodeDrag, dx = e.clientX - d.sx, dy = e.clientY - d.sy;
-        if (Math.sqrt(dx * dx + dy * dy) > 6) clearLP(); // cancel long-press on move
+        if (Math.sqrt(dx * dx + dy * dy) > 8) nodeDrag.moved = true;
         if (onPosChange.current) onPosChange.current(d.id, { x: d.ox + dx, y: d.oy + dy });
       } else if (ptrs.size === 1 && panStart) {
-        clearLP();
         applyTransform({ ...transformRef.current, x: panStart.ox + (e.clientX - panStart.sx), y: panStart.oy + (e.clientY - panStart.sy) });
       } else if (ptrs.size === 2 && lastMid && lastDist) {
-        clearLP();
         const t = transformRef.current, m = mid(), d = pdist(), r = svg.getBoundingClientRect();
         const px = m.x - r.left, py = m.y - r.top, ratio = d / lastDist;
         const ns = Math.min(5, Math.max(0.05, t.scale * ratio)), sf = ns / t.scale;
@@ -97,14 +85,24 @@ export function useCanvasControls({ svgRef, gRef, onNodeLongPress }) {
     };
 
     const onUp = e => {
-      e.preventDefault(); clearLP(); ptrs.delete(e.pointerId);
+      e.preventDefault(); ptrs.delete(e.pointerId);
+
+      if (ptrs.size === 0) {
+        if (nodeDrag && !nodeDrag.moved) {
+          // Clean tap on node
+          onNodeTap?.(nodeDrag.id);
+        } else if (!nodeDrag) {
+          // Tap on background
+          onBackgroundTap?.();
+        }
+        nodeDrag = null; panStart = null; lastMid = null; lastDist = null;
+      }
       if (ptrs.size === 1) {
         const [, rp] = [...ptrs.entries()][0];
         const t = transformRef.current;
         panStart = { ox: t.x, oy: t.y, sx: rp.x, sy: rp.y };
         lastMid = null; lastDist = null;
       }
-      if (ptrs.size === 0) { nodeDrag = null; panStart = null; lastMid = null; lastDist = null; }
     };
 
     svg.addEventListener("pointerdown",   onDown, { passive: false });
@@ -117,7 +115,7 @@ export function useCanvasControls({ svgRef, gRef, onNodeLongPress }) {
       svg.removeEventListener("pointerup",     onUp);
       svg.removeEventListener("pointercancel", onUp);
     };
-  }, [svgRef, applyTransform, onNodeLongPress]);
+  }, [svgRef, applyTransform, onNodeTap, onBackgroundTap]);
 
   return { transformRef, posRef, onPosChange, applyTransform, flushTransform };
 }
