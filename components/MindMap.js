@@ -630,13 +630,11 @@ export default function MindMap(){
       node={n}
       pos={p}
 
-      // состояния
       isSelected={editMode && selId === n.id}
       isNavSelected={!editMode && navSel === n.id}
       isEditing={editId === n.id}
       isNew={newIds.has(n.id)}
 
-      // конфиг
       constants={{
         NW,
         PAD_TOP,
@@ -655,11 +653,9 @@ export default function MindMap(){
         dark,
       }}
 
-      // функции
       wrap={wrap}
       nodeHeight={nh}
 
-      // события
       onPointerDown={handlePointerDown}
     />
   );
