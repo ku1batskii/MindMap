@@ -514,18 +514,22 @@ export default function MindMap() {
           isHome={true}
           theme={theme}
         />
-        {/* Theme toggle floated top-right inside modal */}
+        {/* Theme toggle — top-right icon */}
         <button
           onClick={() => setTheme(t => t === "dark" ? "light" : "dark")}
           style={{
-            position:"fixed", bottom:20, right:16, zIndex:400,
-            background:"transparent",
-            border:`1px solid ${dark?"rgba(0,255,136,0.3)":"rgba(0,100,40,0.3)"}`,
-            color:dark?"rgba(0,255,136,0.6)":"rgba(0,80,30,0.7)",
-            fontFamily:"'Courier New',monospace", fontSize:8,
-            padding:"5px 10px", cursor:"pointer", letterSpacing:2, borderRadius:4,
+            position:"fixed", top:14, right:16, zIndex:400,
+            width:34, height:34, borderRadius:6,
+            background: dark?"rgba(0,0,0,0.55)":"rgba(255,255,255,0.55)",
+            backdropFilter:"blur(8px)", WebkitBackdropFilter:"blur(8px)",
+            border:`1px solid ${dark?"rgba(0,255,136,0.25)":"rgba(0,100,40,0.25)"}`,
+            color:dark?"rgba(0,255,136,0.7)":"rgba(0,80,30,0.75)",
+            cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center",
           }}>
-          {dark ? "☀ LIGHT" : "☾ DARK"}
+          {dark
+            ? <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+            : <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg>
+          }
         </button>
         <style>{`*{box-sizing:border-box;} textarea::placeholder{color:${dark?"rgba(0,255,136,0.3)":"rgba(0,100,40,0.4)"};}`}</style>
       </>
@@ -564,7 +568,7 @@ export default function MindMap() {
 
   // Small icon button for top toolbar
   const iconBtn=()=>({
-    width:34,height:34,borderRadius:6,background:"none",border:"none",
+    width:28,height:28,borderRadius:5,background:"none",border:"none",
     cursor:"pointer",color:C.accentDim,display:"flex",alignItems:"center",justifyContent:"center",
   });
 
@@ -576,12 +580,12 @@ export default function MindMap() {
       <div style={{ position:"absolute", top:0, left:0, right:0, zIndex:30, display:"flex", alignItems:"flex-start", justifyContent:"space-between", padding:"14px 14px 0", pointerEvents:"none" }}>
         {/* Back to input */}
         <button onClick={()=>setView("input")}
-          style={{ width:42,height:42,borderRadius:6, background:dark?"rgba(9,9,9,0.88)":"rgba(240,247,240,0.88)", backdropFilter:"blur(10px)",WebkitBackdropFilter:"blur(10px)", border:`1px solid ${C.border}`,color:C.accentDim, fontSize:20,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",pointerEvents:"all" }}>
+          style={{ width:36,height:36,borderRadius:6, background:dark?"rgba(9,9,9,0.88)":"rgba(240,247,240,0.88)", backdropFilter:"blur(10px)",WebkitBackdropFilter:"blur(10px)", border:`1px solid ${C.border}`,color:C.accentDim, fontSize:18,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",pointerEvents:"all" }}>
           ‹
         </button>
 
         {/* Top-right toolbar */}
-        <div style={{ display:"flex",gap:2, background:dark?"rgba(9,9,9,0.88)":"rgba(240,247,240,0.88)", backdropFilter:"blur(10px)",WebkitBackdropFilter:"blur(10px)", border:`1px solid ${C.border}`,borderRadius:6,padding:"5px 6px",pointerEvents:"all" }}>
+        <div style={{ display:"flex",gap:1, background:dark?"rgba(9,9,9,0.88)":"rgba(240,247,240,0.88)", backdropFilter:"blur(10px)",WebkitBackdropFilter:"blur(10px)", border:`1px solid ${C.border}`,borderRadius:6,padding:"4px 5px",pointerEvents:"all" }}>
           <button onClick={exportSVG}    style={iconBtn()}>
             <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
           </button>
