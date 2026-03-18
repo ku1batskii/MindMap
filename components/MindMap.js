@@ -182,7 +182,7 @@ function MatrixRain({ opacity = 1 }) {
 }
 
 // ─── Input Modal (Matrix) — used as home AND follow-up ────────────────────────
-function InputModal({ value, onChange, onSubmit, onClose, busy, isHome, theme }) {
+function InputModal({ value, onChange, onSubmit, onClose, busy, isHome, theme, onThemeToggle }) {
   const textareaRef = useRef(null);
   useEffect(() => { setTimeout(() => textareaRef.current?.focus(), 120); }, []);
   const dark = theme === "dark";
@@ -201,7 +201,15 @@ function InputModal({ value, onChange, onSubmit, onClose, busy, isHome, theme })
         <span style={{ fontSize:9, color:dark?"rgba(0,255,136,0.45)":"rgba(0,100,40,0.6)", letterSpacing:4, fontFamily:"'Courier New',monospace" }}>
           {isHome ? "MIND MAP" : "INPUT"}
         </span>
-        {!isHome && (
+        {isHome ? (
+          <button onClick={onThemeToggle}
+            style={{ width:30, height:30, borderRadius:5, background:"transparent", border:`1px solid ${faintAccent}`, color:dark?"rgba(0,255,136,0.7)":"rgba(0,120,50,0.8)", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center" }}>
+            {dark
+              ? <svg width="13" height="13" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+              : <svg width="13" height="13" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg>
+            }
+          </button>
+        ) : (
           <button onClick={onClose}
             style={{ background:"transparent", border:`1px solid ${faintAccent}`, color:dark?"rgba(0,255,136,0.7)":"rgba(0,120,50,0.8)", fontFamily:"'Courier New',monospace", fontSize:9, padding:"4px 12px", cursor:"pointer", letterSpacing:2, borderRadius:4 }}>
             ✕ CLOSE
@@ -299,6 +307,7 @@ export default function MindMap() {
   const [showRelated, setShowRelated] = useState(false);
   const [relatedLoad, setRelatedLoad] = useState(false);
   const [relatedList, setRelatedList] = useState([]);
+  const relatedCache = useRef({}); // goal → topics[]
 
   // Refs
   const svgRef      = useRef(null), gRef = useRef(null), logRef = useRef(null);
@@ -484,13 +493,21 @@ export default function MindMap() {
 
   const fetchRelated=useCallback(async()=>{
     if(!tree.goal)return;
-    setShowRelated(true);setRelatedLoad(true);setRelatedList([]);
+    setShowRelated(true);
+    // Return cached result if goal hasn't changed
+    if(relatedCache.current[tree.goal]){
+      setRelatedList(relatedCache.current[tree.goal]);
+      return;
+    }
+    setRelatedLoad(true); setRelatedList([]);
     try{
       const prompt=`Given mind map topic "${tree.goal}", suggest 7 related topics. Return ONLY a JSON array of short strings (max 6 words each). Same language.`;
       const res=await fetch("/api/ai",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-haiku-4-5-20251001",max_tokens:300,messages:[{role:"user",content:prompt}]})});
       const data=await res.json();
       const raw=(data.content?.[0]?.text||"").replace(/```json|```/g,"").trim();
-      setRelatedList(JSON.parse(raw.match(/\[[\s\S]*\]/)?.[0]||"[]").slice(0,7));
+      const topics=JSON.parse(raw.match(/\[[\s\S]*\]/)?.[0]||"[]").slice(0,7);
+      relatedCache.current[tree.goal]=topics;
+      setRelatedList(topics);
     }catch(e){}
     setRelatedLoad(false);
   },[tree.goal]);
@@ -513,24 +530,8 @@ export default function MindMap() {
           busy={busy}
           isHome={true}
           theme={theme}
+          onThemeToggle={() => setTheme(t => t === "dark" ? "light" : "dark")}
         />
-        {/* Theme toggle — top-right icon */}
-        <button
-          onClick={() => setTheme(t => t === "dark" ? "light" : "dark")}
-          style={{
-            position:"fixed", top:14, right:16, zIndex:400,
-            width:34, height:34, borderRadius:6,
-            background: dark?"rgba(0,0,0,0.55)":"rgba(255,255,255,0.55)",
-            backdropFilter:"blur(8px)", WebkitBackdropFilter:"blur(8px)",
-            border:`1px solid ${dark?"rgba(0,255,136,0.25)":"rgba(0,100,40,0.25)"}`,
-            color:dark?"rgba(0,255,136,0.7)":"rgba(0,80,30,0.75)",
-            cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center",
-          }}>
-          {dark
-            ? <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
-            : <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg>
-          }
-        </button>
         <style>{`*{box-sizing:border-box;} textarea::placeholder{color:${dark?"rgba(0,255,136,0.3)":"rgba(0,100,40,0.4)"};}`}</style>
       </>
     );
@@ -558,7 +559,7 @@ export default function MindMap() {
 
   // Pill button
   const pillBtn=(disabled=false,active=false)=>({
-    width:40,height:40,borderRadius:6,
+    width:34,height:34,borderRadius:6,
     background:active?(dark?"rgba(0,255,136,0.1)":"rgba(0,80,30,0.1)"):"none",
     border:"none",cursor:disabled?"default":"pointer",
     color:disabled?C.accentFaint:(active?C.accent:C.accentDim),
@@ -587,20 +588,20 @@ export default function MindMap() {
         {/* Top-right toolbar */}
         <div style={{ display:"flex",gap:1, background:dark?"rgba(9,9,9,0.88)":"rgba(240,247,240,0.88)", backdropFilter:"blur(10px)",WebkitBackdropFilter:"blur(10px)", border:`1px solid ${C.border}`,borderRadius:6,padding:"4px 5px",pointerEvents:"all" }}>
           <button onClick={exportSVG}    style={iconBtn()}>
-            <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+            <svg width="12" height="12" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
           </button>
           <button onClick={()=>setTheme(t=>t==="dark"?"light":"dark")} style={iconBtn()}>
             {dark
-              ? <svg width="13" height="13" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
-              : <svg width="13" height="13" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg>
+              ? <svg width="11" height="11" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+              : <svg width="11" height="11" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg>
             }
           </button>
           <button onClick={()=>setShowReport(true)} style={iconBtn()}>
-            <svg width="13" height="13" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+            <svg width="11" height="11" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
           </button>
           <button onClick={saveMap} disabled={!tree.nodes.length}
             style={{...iconBtn(), color:tree.nodes.length?C.accentDim:C.accentFaint, cursor:tree.nodes.length?"pointer":"default"}}>
-            <svg width="13" height="13" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><polyline points="17,21 17,13 7,13 7,21"/><polyline points="7,3 7,8 15,8"/></svg>
+            <svg width="11" height="11" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><polyline points="17,21 17,13 7,13 7,21"/><polyline points="7,3 7,8 15,8"/></svg>
           </button>
         </div>
       </div>
@@ -685,7 +686,7 @@ export default function MindMap() {
 
         {/* ── Pill toolbar ─────────────────────────────────────────────── */}
         <div style={{
-          position:"absolute", bottom:56, left:"50%", transform:"translateX(-50%)", zIndex:20,
+          position:"absolute", bottom:36, left:"50%", transform:"translateX(-50%)", zIndex:20,
           display:"flex", alignItems:"center", gap:0,
           background:dark?"rgba(9,9,9,0.88)":"rgba(240,247,240,0.88)",
           backdropFilter:"blur(14px)", WebkitBackdropFilter:"blur(14px)",
