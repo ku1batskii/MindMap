@@ -283,6 +283,7 @@ export default function MindMap() {
     { c:"s", t:"/mock -- тест · /clear -- сброс" }
   ]);
   const [busy, setBusy]             = useState(false);
+  const [busyVisible, setBusyVisible] = useState(false);
   const [transform, setTransform]   = useState({ x:0, y:0, scale:1 });
   const [newNodeIds, setNewNodeIds] = useState(new Set());
   const [editMode, setEditMode]     = useState(false);
@@ -313,7 +314,11 @@ export default function MindMap() {
   const svgRef      = useRef(null), gRef = useRef(null), logRef = useRef(null);
   const treeRef     = useRef(tree), posRef = useRef({});
   const transformRef= useRef({ x:0, y:0, scale:1 }), editModeRef = useRef(false);
-  useEffect(() => { treeRef.current = tree; }, [tree]);
+  // Fade overlay in immediately, out with delay
+  useEffect(() => {
+    if (busy) { setBusyVisible(true); }
+    else { const t = setTimeout(() => setBusyVisible(false), 600); return () => clearTimeout(t); }
+  }, [busy]);
   useEffect(() => { posRef.current = pos; }, [pos]);
   useEffect(() => { editModeRef.current = editMode; }, [editMode]);
 
@@ -712,10 +717,12 @@ export default function MindMap() {
           </button>
         </div>
 
-        {/* Related */}
-        <button onClick={fetchRelated}
-          style={{position:"absolute",bottom:60,left:14,background:dark?"rgba(9,9,9,0.88)":"rgba(240,247,240,0.88)",backdropFilter:"blur(10px)",WebkitBackdropFilter:"blur(10px)",border:`1px solid ${C.border}`,color:C.accentDim,fontFamily:"'Courier New',monospace",fontSize:8,padding:"6px 10px",cursor:"pointer",letterSpacing:2,borderRadius:6}}>
-          RELATED →
+        {/* Related — star icon */}
+        <button onClick={fetchRelated} title="Related topics"
+          style={{position:"absolute",bottom:36,left:14,width:34,height:34,borderRadius:6,background:dark?"rgba(9,9,9,0.88)":"rgba(240,247,240,0.88)",backdropFilter:"blur(10px)",WebkitBackdropFilter:"blur(10px)",border:`1px solid ${C.border}`,color:C.accentDim,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>
+          <svg width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
+            <polygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26"/>
+          </svg>
         </button>
 
         {busy&&(
@@ -806,5 +813,3 @@ export default function MindMap() {
         button{outline:none;}
       `}</style>
     </div>
-  );
-}
