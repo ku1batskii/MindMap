@@ -725,9 +725,26 @@ export default function MindMap() {
           </svg>
         </button>
 
-        {busy&&(
-          <div style={{position:"absolute",inset:0,background:dark?"rgba(9,9,9,0.45)":"rgba(240,247,240,0.5)",backdropFilter:"blur(2px)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:10}}>
-            <div style={{fontSize:10,color:C.accentDim,letterSpacing:4,animation:"blink 0.5s step-end infinite"}}>ГЕНЕРИРУЮ…</div>
+        {/* Matrix loading overlay — fades in/out */}
+        {busyVisible&&(
+          <div style={{
+            position:"absolute", inset:0, zIndex:10,
+            opacity: busy ? 1 : 0,
+            transition: busy ? "opacity 0.25s ease-in" : "opacity 0.55s ease-out",
+            pointerEvents: busy ? "all" : "none",
+          }}>
+            <MatrixRain opacity={dark ? 0.92 : 0.18} />
+            <div style={{
+              position:"absolute", inset:0, zIndex:1,
+              background: dark ? "rgba(0,0,0,0.55)" : "rgba(220,245,225,0.72)",
+              display:"flex", alignItems:"center", justifyContent:"center",
+            }}>
+              <div style={{
+                fontFamily:"'Courier New',monospace", fontSize:10,
+                color: dark ? "rgba(0,255,136,0.8)" : "rgba(0,80,30,0.8)",
+                letterSpacing:5, animation:"blink 0.7s step-end infinite",
+              }}>ГЕНЕРИРУЮ</div>
+            </div>
           </div>
         )}
       </div>
@@ -813,3 +830,5 @@ export default function MindMap() {
         button{outline:none;}
       `}</style>
     </div>
+  );
+}
