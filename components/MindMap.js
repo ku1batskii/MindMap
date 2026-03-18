@@ -729,7 +729,6 @@ const setTreeSave = useCallback((t) => {
       wrap={wrap}
       nodeHeight={nh}
 
-      onPointerDown={handlePointerDown}
     />
   );
 })}
