@@ -63,7 +63,10 @@ function computeRadialLayout(tree, W, H) {
   pos["ROOT"] = { x: cx, y: cy };
   const orphans = tree.nodes.filter(n => !n.parentId);
   if (!orphans.length) return pos;
-  const L1R = Math.max(220, orphans.length * 42);
+  // L1: ensure nodes never overlap — min arc gap = node width + padding
+  const minArcGap = NW + 60;
+  const minL1R = (minArcGap * Math.max(orphans.length, 1)) / (2 * Math.PI);
+  const L1R = Math.max(280, minL1R);
   orphans.forEach((n, i) => {
     const angle = (i / orphans.length) * Math.PI * 2 - Math.PI / 2;
     const nx = cx + L1R * Math.cos(angle);
@@ -71,14 +74,21 @@ function computeRadialLayout(tree, W, H) {
     pos[n.id] = { x: nx, y: ny };
     const children = tree.nodes.filter(c => c.parentId === n.id);
     if (!children.length) return;
-    const L2R = 150, fanSpan = Math.min(Math.PI * 0.62, children.length * 0.36);
+    const minL2R = (NW + 50) * children.length / (2 * Math.PI * 0.65);
+    const L2R = Math.max(180, minL2R);
+    const sectorMax = orphans.length > 1 ? (2 * Math.PI / orphans.length) * 0.7 : Math.PI * 1.3;
+    const fanSpan = Math.min(sectorMax, children.length * 0.55);
     children.forEach((c, j) => {
       const ca = children.length === 1 ? angle : angle - fanSpan/2 + (fanSpan/(children.length-1))*j;
-      const cx2 = nx + L2R * Math.cos(ca), cy2 = ny + L2R * Math.sin(ca);
+      const cx2 = nx + L2R * Math.cos(ca);
+      const cy2 = ny + L2R * Math.sin(ca);
       pos[c.id] = { x: cx2, y: cy2 };
       const gcs = tree.nodes.filter(gc => gc.parentId === c.id);
       if (!gcs.length) return;
-      const L3R = 110, gFan = Math.min(Math.PI * 0.32, gcs.length * 0.2);
+      const minL3R = (NW + 40) * gcs.length / (2 * Math.PI * 0.55);
+      const L3R = Math.max(140, minL3R);
+      const gSector = fanSpan / Math.max(children.length, 1) * 0.75;
+      const gFan = Math.min(gSector, gcs.length * 0.42);
       gcs.forEach((gc, k) => {
         const gca = gcs.length === 1 ? ca : ca - gFan/2 + (gFan/(gcs.length-1))*k;
         pos[gc.id] = { x: cx2 + L3R * Math.cos(gca), y: cy2 + L3R * Math.sin(gca) };
