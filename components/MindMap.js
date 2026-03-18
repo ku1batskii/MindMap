@@ -307,25 +307,26 @@ useEffect(() => {
   if (!svg || view !== "map") return;
 
   const ptrs = new Map();
+  let drag = null, pan = null, lm = null, ld = null;
+
   const mid = () => {
     const p = [...ptrs.values()];
     return { x: (p[0].x + p[1].x) / 2, y: (p[0].y + p[1].y) / 2 };
   };
   const pd = () => {
     const p = [...ptrs.values()];
-    const dx = p[0].x - p[1].x,
-          dy = p[0].y - p[1].y;
+    const dx = p[0].x - p[1].x, dy = p[0].y - p[1].y;
     return Math.sqrt(dx * dx + dy * dy);
   };
 
-  let drag = null, pan = null, lm = null, ld = null;
-
   const down = e => {
+    console.log("Pointer down", e.pointerId, e.target.dataset?.nodeid);
     e.preventDefault();
     svg.setPointerCapture(e.pointerId);
     ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
 
     if (ptrs.size === 1) {
+      // одиночное касание — drag node или pan
       let el = e.target, nid = null;
       while (el && el !== svg) {
         if (el.dataset?.nodeid) { nid = el.dataset.nodeid; break; }
@@ -340,79 +341,63 @@ useEffect(() => {
         lm = null; ld = null;
       }
     } else if (ptrs.size === 2) {
-      drag = null;
-      pan = null;
-      lm = mid();
-      ld = pd();
+      // двухпальцевый жест — начальная точка для зума
+      drag = null; pan = null; lm = mid(); ld = pd();
     }
   };
 
   const move = e => {
     if (!ptrs.has(e.pointerId)) return;
+    console.log("Pointer move", e.pointerId);
     e.preventDefault();
     ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
 
     if (ptrs.size === 1 && drag) {
-      const dx = e.clientX - drag.sx,
-            dy = e.clientY - drag.sy;
+      // drag node
+      const dx = e.clientX - drag.sx, dy = e.clientY - drag.sy;
       if (Math.sqrt(dx * dx + dy * dy) > 6) drag.moved = true;
       const np = { x: drag.ox + dx, y: drag.oy + dy };
       posRef.current[drag.id] = np;
       setPos(prev => ({ ...prev, [drag.id]: np }));
     } else if (ptrs.size === 1 && pan) {
-      const dx = e.clientX - pan.sx,
-            dy = e.clientY - pan.sy;
+      // панорамирование
+      const dx = e.clientX - pan.sx, dy = e.clientY - pan.sy;
       if (Math.sqrt(dx * dx + dy * dy) > 4) pan.moved = true;
       applyT({ ...tfmRef.current, x: pan.ox + dx, y: pan.oy + dy });
     } else if (ptrs.size === 2 && lm && ld) {
-      const t = tfmRef.current,
-            m = mid(),
-            d = pd(),
-            rect = svg.getBoundingClientRect();
-      const px = m.x - rect.left,
-            py = m.y - rect.top,
-            ns = Math.min(5, Math.max(0.05, t.scale * d / ld)),
-            sf = ns / t.scale;
-
-      applyT({
-        scale: ns,
-        x: px - sf * (px - t.x) + (m.x - lm.x),
-        y: py - sf * (py - t.y) + (m.y - lm.y)
-      });
-
-      lm = m;
-      ld = d;
+      // двухпальцевый зум
+      const t = tfmRef.current, m = mid(), d = pd(), rect = svg.getBoundingClientRect();
+      const px = m.x - rect.left, py = m.y - rect.top;
+      const ns = Math.min(5, Math.max(0.05, t.scale * d / ld));
+      const sf = ns / t.scale;
+      applyT({ scale: ns, x: px - sf * (px - t.x) + (m.x - lm.x), y: py - sf * (py - t.y) + (m.y - lm.y) });
+      lm = m; ld = d;
     }
   };
 
   const up = e => {
+    console.log("Pointer up", e.pointerId);
     e.preventDefault();
     ptrs.delete(e.pointerId);
 
     if (ptrs.size === 0) {
       flushT(tfmRef.current);
-
-      // TAP / select node
       if (drag && !drag.moved && editModeRef.current && drag.id !== "ROOT") {
-        setTimeout(() => setSelId(prev => (prev === drag.id ? null : drag.id)), 10);
+        setSelId(prev => (prev === drag.id ? null : drag.id));
         setEditId(null);
       }
       if (pan && !pan.moved && editModeRef.current) {
         setSelId(null);
         setEditId(null);
       }
+      drag = null; pan = null; lm = null; ld = null;
+    }
 
-      drag = null;
-      pan = null;
-      lm = null;
-      ld = null;
-
-    } else if (ptrs.size === 1) {
+    if (ptrs.size === 1) {
       const [, rp] = [...ptrs.entries()][0];
       const t = tfmRef.current;
       pan = { ox: t.x, oy: t.y, sx: rp.x, sy: rp.y, moved: false };
-      lm = null;
-      ld = null;
+      lm = null; ld = null;
     }
   };
 
