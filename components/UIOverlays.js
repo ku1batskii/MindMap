@@ -66,7 +66,7 @@ export function InputModal({ value, onChange, onSubmit, onClose, busy, isHome, t
           style={{ flex:1, background: dark ? "rgba(0,0,0,0.72)" : "rgba(255,255,255,0.72)", border:`1px solid ${faint}`, color: dark ? "#00ff88" : "#003d18", fontFamily:"'Courier New',monospace", fontSize:15, lineHeight:1.65, padding:"16px", outline:"none", resize:"none", caretColor:ac, borderRadius:6 }}
         />
         <button onClick={onSubmit} disabled={busy || !value.trim()}
-          style={{ background:"transparent", border:`1px solid ${busy || !value.trim() ? faint : ac}`, color: busy || !value.trim() ? faint : (dark ? "#00ff88" : "#003d18"), fontFamily:"'Courier New',monospace", fontSize:11, padding:"14px", cursor: busy || !value.trim() ? "default" : "pointer", letterSpacing:3, borderRadius:6 }}>
+          style={{ background:"transparent", border:`1px solid ${busy || !value.trim() ? faint : ac}`, color: busy || !value.trim() ? faint : (dark ? "#00ff88" : "#003d18"), fontFamily:"'Courier New',monospace", fontSize:11, padding:"14px", cursor: busy || !value.trim() ? "not-allowed" : "pointer", letterSpacing:3, borderRadius:6, opacity: busy || !value.trim() ? 0.4 : 1 }}>
           {busy ? "ГЕНЕРИРУЮ…" : "↳ GENERATE MAP"}
         </button>
       </div>
