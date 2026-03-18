@@ -19,7 +19,11 @@ export default function MindMap() {
     { c:"s", t:"/mock -- тест · /clear -- сброс" },
   ]);
   const logRef = useRef(null);
-  const onLog  = useCallback((c, t) => {
+  const onLog = useCallback((c, t) => {
+    if (c === "_clear_busy") {
+      setLog(l => l.filter(i => i.c !== "b"));
+      return;
+    }
     setLog(l => { const n = [...l, { c, t }]; return n.length > 80 ? n.slice(-80) : n; });
     setTimeout(() => { if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight; }, 30);
   }, []);
