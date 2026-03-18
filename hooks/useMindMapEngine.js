@@ -77,6 +77,7 @@ export function useMindMapEngine({ onLog }) {
       setMapHistory(prev => [...prev.slice(0, histIdxRef.current + 1), saved]);
       setHistIdx(prev => { const ni = prev + 1; histIdxRef.current = ni; return ni; });
 
+      onLog("_clear_busy", "");
       onLog("o", "✓ готово");
       return fresh.map(n => n.id); // returns new node ids for animation
     } catch (e) {
