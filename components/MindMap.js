@@ -61,18 +61,29 @@ export default function MindMap() {
 
   // ── Layout sync ───────────────────────────────────────────────────────────────
   useEffect(() => {
-    const svg = svgRef.current; if (!svg || view !== "map") return;
-    const { width: W, height: H } = svg.getBoundingClientRect();
-    const w = W || 360, h = H || 600;
-    const newPos = computeRadialLayout(engine.tree, w, h);
-    posRef.current = newPos;
-    setPos(newPos);
-    flushTransform(fitAll(newPos, w, h), setTransform);
+    if (view !== "map") return;
+    // Small delay to ensure SVG is rendered and has real dimensions
+    const run = () => {
+      const svg = svgRef.current; if (!svg) return;
+      const rect = svg.getBoundingClientRect();
+      const w = rect.width  > 10 ? rect.width  : window.innerWidth;
+      const h = rect.height > 10 ? rect.height : window.innerHeight - 200;
+      const newPos = computeRadialLayout(engine.tree, w, h);
+      posRef.current = newPos;
+      setPos(newPos);
+      flushTransform(fitAll(newPos, w, h), setTransform);
+    };
+    // Try immediately, then retry after paint
+    run();
+    const id = requestAnimationFrame(run);
+    return () => cancelAnimationFrame(id);
   }, [engine.tree, view]);
 
   const fit = useCallback(() => {
     const svg = svgRef.current; if (!svg) return;
-    const { width: W, height: H } = svg.getBoundingClientRect();
+    const rect = svg.getBoundingClientRect();
+    const W = rect.width  > 10 ? rect.width  : window.innerWidth;
+    const H = rect.height > 10 ? rect.height : window.innerHeight - 200;
     flushTransform(fitAll(posRef.current, W, H), setTransform);
   }, [flushTransform, posRef]);
 
