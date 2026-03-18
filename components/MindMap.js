@@ -301,88 +301,146 @@ export default function MindMap(){
     return()=>svg.removeEventListener("wheel",h);
   },[view,flushT]);
 
-  // ── Pointer gestures ───────────────────────────────────────────────────────
-  useEffect(()=>{
-    const svg=svgRef.current;if(!svg||view!=="map")return;
-    const ptrs=new Map();
-    const mid=()=>{const p=[...ptrs.values()];return{x:(p[0].x+p[1].x)/2,y:(p[0].y+p[1].y)/2};};
-    const pd=()=>{const p=[...ptrs.values()];const dx=p[0].x-p[1].x,dy=p[0].y-p[1].y;return Math.sqrt(dx*dx+dy*dy);};
-    let drag=null,pan=null,lm=null,ld=null;
+// ── Pointer gestures ───────────────────────────────────────────────────────
+useEffect(() => {
+  const svg = svgRef.current;
+  if (!svg || view !== "map") return;
 
-    const down=e=>{
-      e.preventDefault();svg.setPointerCapture(e.pointerId);
-      ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY});
-      if(ptrs.size===1){
-        let el=e.target,nid=null;
-        while(el&&el!==svg){if(el.dataset?.nodeid){nid=el.dataset.nodeid;break;}el=el.parentElement;}
-        if(nid){
-          const p=posRef.current[nid]||{x:0,y:0};
-          drag={id:nid,ox:p.x,oy:p.y,sx:e.clientX,sy:e.clientY,moved:false};
-        }else{
-          const t=tfmRef.current;
-          pan={ox:t.x,oy:t.y,sx:e.clientX,sy:e.clientY,moved:false};
-          lm=null;ld=null;
-        }
-      }else if(ptrs.size===2){drag=null;pan=null;lm=mid();ld=pd();}
-    };
+  const ptrs = new Map();
+  const mid = () => {
+    const p = [...ptrs.values()];
+    return { x: (p[0].x + p[1].x) / 2, y: (p[0].y + p[1].y) / 2 };
+  };
+  const pd = () => {
+    const p = [...ptrs.values()];
+    const dx = p[0].x - p[1].x,
+          dy = p[0].y - p[1].y;
+    return Math.sqrt(dx * dx + dy * dy);
+  };
 
-    const move=e=>{
-      if(!ptrs.has(e.pointerId))return;e.preventDefault();
-      ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY});
-      if(ptrs.size===1&&drag){
-        const dx=e.clientX-drag.sx,dy=e.clientY-drag.sy;
-        if(Math.sqrt(dx*dx+dy*dy)>6)drag.moved=true;
-        const np={x:drag.ox+dx,y:drag.oy+dy};
-        posRef.current[drag.id]=np;
-        setPos(prev=>({...prev,[drag.id]:np}));
-      }else if(ptrs.size===1&&pan){
-        const dx=e.clientX-pan.sx,dy=e.clientY-pan.sy;
-        if(Math.sqrt(dx*dx+dy*dy)>4)pan.moved=true;
-        applyT({...tfmRef.current,x:pan.ox+dx,y:pan.oy+dy});
-      }else if(ptrs.size===2&&lm&&ld){
-        const t=tfmRef.current,m=mid(),d=pd(),rect=svg.getBoundingClientRect();
-        const px=m.x-rect.left,py=m.y-rect.top,ns=Math.min(5,Math.max(0.05,t.scale*d/ld)),sf=ns/t.scale;
-        applyT({scale:ns,x:px-sf*(px-t.x)+(m.x-lm.x),y:py-sf*(py-t.y)+(m.y-lm.y)});
-        lm=m;ld=d;
+  let drag = null, pan = null, lm = null, ld = null;
+
+  const down = e => {
+    e.preventDefault();
+    svg.setPointerCapture(e.pointerId);
+    ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+    if (ptrs.size === 1) {
+      let el = e.target, nid = null;
+      while (el && el !== svg) {
+        if (el.dataset?.nodeid) { nid = el.dataset.nodeid; break; }
+        el = el.parentElement;
       }
-    };
-
-    const up=e=>{
-      e.preventDefault();ptrs.delete(e.pointerId);
-      if(ptrs.size===0){
-        flushT(tfmRef.current);
-        if(drag&&!drag.moved&&editModeRef.current&&drag.id!=="ROOT"){
-          setSelId(prev=>prev===drag.id?null:drag.id);setEditId(null);
-        }
-        if(pan&&!pan.moved&&editModeRef.current){setSelId(null);setEditId(null);}
-        drag=null;pan=null;lm=null;ld=null;
+      if (nid) {
+        const p = posRef.current[nid] || { x: 0, y: 0 };
+        drag = { id: nid, ox: p.x, oy: p.y, sx: e.clientX, sy: e.clientY, moved: false };
+      } else {
+        const t = tfmRef.current;
+        pan = { ox: t.x, oy: t.y, sx: e.clientX, sy: e.clientY, moved: false };
+        lm = null; ld = null;
       }
-      if(ptrs.size===1){
-        const[,rp]=[...ptrs.entries()][0];const t=tfmRef.current;
-        pan={ox:t.x,oy:t.y,sx:rp.x,sy:rp.y,moved:false};lm=null;ld=null;
-      }
-    };
-
-    svg.addEventListener("pointerdown",down,{passive:false});
-    svg.addEventListener("pointermove",move,{passive:false});
-    svg.addEventListener("pointerup",up,{passive:false});
-    svg.addEventListener("pointercancel",up,{passive:false});
-    return()=>{
-      svg.removeEventListener("pointerdown",down);svg.removeEventListener("pointermove",move);
-      svg.removeEventListener("pointerup",up);svg.removeEventListener("pointercancel",up);
-    };
-  },[view,applyT,flushT]);
-
-  // ── Process ────────────────────────────────────────────────────────────────
-  const setTreeSave=useCallback((t)=>{
-    treeRef.current=t;setTree(t);
-    if(t.goal&&t.nodes.length){
-      const ex=loadSessions();
-      const entry={id:t.goal+"_"+Date.now(),goal:t.goal,nc:t.nodes.length,ts:Date.now(),tree:t};
-      const upd=[entry,...ex.filter(s=>s.goal!==t.goal)].slice(0,20);
-      saveSessions(upd);setSessions(upd);
+    } else if (ptrs.size === 2) {
+      drag = null;
+      pan = null;
+      lm = mid();
+      ld = pd();
     }
-  },[]);
+  };
+
+  const move = e => {
+    if (!ptrs.has(e.pointerId)) return;
+    e.preventDefault();
+    ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+    if (ptrs.size === 1 && drag) {
+      const dx = e.clientX - drag.sx,
+            dy = e.clientY - drag.sy;
+      if (Math.sqrt(dx * dx + dy * dy) > 6) drag.moved = true;
+      const np = { x: drag.ox + dx, y: drag.oy + dy };
+      posRef.current[drag.id] = np;
+      setPos(prev => ({ ...prev, [drag.id]: np }));
+    } else if (ptrs.size === 1 && pan) {
+      const dx = e.clientX - pan.sx,
+            dy = e.clientY - pan.sy;
+      if (Math.sqrt(dx * dx + dy * dy) > 4) pan.moved = true;
+      applyT({ ...tfmRef.current, x: pan.ox + dx, y: pan.oy + dy });
+    } else if (ptrs.size === 2 && lm && ld) {
+      const t = tfmRef.current,
+            m = mid(),
+            d = pd(),
+            rect = svg.getBoundingClientRect();
+      const px = m.x - rect.left,
+            py = m.y - rect.top,
+            ns = Math.min(5, Math.max(0.05, t.scale * d / ld)),
+            sf = ns / t.scale;
+
+      applyT({
+        scale: ns,
+        x: px - sf * (px - t.x) + (m.x - lm.x),
+        y: py - sf * (py - t.y) + (m.y - lm.y)
+      });
+
+      lm = m;
+      ld = d;
+    }
+  };
+
+  const up = e => {
+    e.preventDefault();
+    ptrs.delete(e.pointerId);
+
+    if (ptrs.size === 0) {
+      flushT(tfmRef.current);
+
+      // TAP / select node
+      if (drag && !drag.moved && editModeRef.current && drag.id !== "ROOT") {
+        setTimeout(() => setSelId(prev => (prev === drag.id ? null : drag.id)), 10);
+        setEditId(null);
+      }
+      if (pan && !pan.moved && editModeRef.current) {
+        setSelId(null);
+        setEditId(null);
+      }
+
+      drag = null;
+      pan = null;
+      lm = null;
+      ld = null;
+
+    } else if (ptrs.size === 1) {
+      const [, rp] = [...ptrs.entries()][0];
+      const t = tfmRef.current;
+      pan = { ox: t.x, oy: t.y, sx: rp.x, sy: rp.y, moved: false };
+      lm = null;
+      ld = null;
+    }
+  };
+
+  svg.addEventListener("pointerdown", down, { passive: false });
+  svg.addEventListener("pointermove", move, { passive: false });
+  svg.addEventListener("pointerup", up, { passive: false });
+  svg.addEventListener("pointercancel", up, { passive: false });
+
+  return () => {
+    svg.removeEventListener("pointerdown", down);
+    svg.removeEventListener("pointermove", move);
+    svg.removeEventListener("pointerup", up);
+    svg.removeEventListener("pointercancel", up);
+  };
+}, [view, applyT, flushT]);
+
+// ── Process ────────────────────────────────────────────────────────────────
+const setTreeSave = useCallback((t) => {
+  treeRef.current = t;
+  setTree(t);
+  if (t.goal && t.nodes.length) {
+    const ex = loadSessions();
+    const entry = { id: t.goal + "_" + Date.now(), goal: t.goal, nc: t.nodes.length, ts: Date.now(), tree: t };
+    const upd = [entry, ...ex.filter(s => s.goal !== t.goal)].slice(0, 20);
+    saveSessions(upd);
+    setSessions(upd);
+  }
+}, []);
 
   const process=useCallback(async val=>{
     val=val.trim();if(!val)return;
