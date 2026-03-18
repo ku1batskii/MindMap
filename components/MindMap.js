@@ -176,6 +176,13 @@ function MatrixRain({opacity=1}){
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
 export default function MindMap(){
+  // ── PWA Service Worker ────────────────────────────────────────────────────
+  useEffect(()=>{
+    if("serviceWorker" in navigator){
+      navigator.serviceWorker.register("/sw.js").catch(()=>{});
+    }
+  },[]);
+
   const [view,setView]           = useState("input");
   const [inputText,setInputText] = useState("");
   const [theme,setTheme]         = useState("dark");
