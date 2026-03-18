@@ -1,111 +1,190 @@
-import React, { useRef, useEffect } from "react";
+import React from "react";
 
 function Node({
   node,
   pos,
+
+  // состояния
   isSelected,
+  isNavSelected,
   isEditing,
+  isNew,
+
+  // конфиг
+  constants,
+  theme,
+
+  // функции
+  wrap,
+  nodeHeight,
+
+  // события
   onPointerDown,
-  onDoubleClick,
-  onChangeTitle,
-  onChangeNote,
 }) {
-  const ref = useRef(null);
+  if (!node || !pos) return null;
 
-  // ⚡ прямое обновление позиции без лишних ререндеров
-  useEffect(() => {
-    if (!ref.current || !pos) return;
-    ref.current.setAttribute(
-      "transform",
-      `translate(${pos.x || 0}, ${pos.y || 0})`
-    );
-  }, [pos]);
+  const {
+    NW,
+    PAD_TOP,
+    TITLE_LH,
+    NOTE_LH,
+    DIV_GAP,
+    DIV_H,
+    NOTE_GAP,
+    TITLE_MAX,
+    NOTE_MAX,
+  } = constants;
 
-  if (!node) return null;
+  const { NS, C, dark } = theme;
 
-  const { id, title, note, type } = node;
+  const ns = NS[node.type] || NS.idea;
+  const h = nodeHeight(node.title, node.note);
 
-  // 🎨 стили (можешь потом вынести в CSS)
-  const styles = {
-    idea: {
-      fill: "#002a38",
-      stroke: "#00d4ff",
-      color: "#33eeff",
-    },
-    subgoal: {
-      fill: "#00210f",
-      stroke: "#00ff55",
-      color: "#00ffaa",
-    },
-    step: {
-      fill: "#181e18",
-      stroke: "#88bb88",
-      color: "#aaffaa",
-    },
-  };
+  const tl = wrap(node.title || "", TITLE_MAX);
+  const nl = wrap(node.note || "", NOTE_MAX);
 
-  const style = styles[type] || styles.step;
+  const TOP = -h / 2;
 
   return (
     <g
-      ref={ref}
+      transform={`translate(${pos.x},${pos.y})`}
+      style={{
+        cursor: "pointer",
+        ...(isNew ? { animation: "nodeIn 0.35s ease-out" } : {}),
+      }}
+      data-nodeid={node.id}
       onPointerDown={(e) => onPointerDown(e, node)}
-      onDoubleClick={() => onDoubleClick(node)}
-      style={{ cursor: "pointer" }}
     >
-      {/* рамка */}
+      {/* selection outline */}
+      {(isSelected || isNavSelected) && (
+        <rect
+          x={-NW / 2 - 3}
+          y={TOP - 3}
+          width={NW + 6}
+          height={h + 6}
+          rx={7}
+          fill="none"
+          stroke={C.accent}
+          strokeWidth={2}
+          opacity={0.85}
+        />
+      )}
+
+      {/* edit mode outline */}
+      {!isSelected && (
+        <rect
+          x={-NW / 2 - 2}
+          y={TOP - 2}
+          width={NW + 4}
+          height={h + 4}
+          rx={7}
+          fill="none"
+          stroke={C.accentFaint}
+          strokeWidth={1}
+          strokeDasharray="4 3"
+        />
+      )}
+
+      {/* main rect */}
       <rect
-        x={-80}
-        y={-30}
-        width={160}
-        height={60}
-        rx={10}
-        fill={style.fill}
-        stroke={isSelected ? "#ffffff" : style.stroke}
-        strokeWidth={isSelected ? 2 : 1}
+        x={-NW / 2}
+        y={TOP}
+        width={NW}
+        height={h}
+        rx={6}
+        fill={ns.fill}
+        stroke={ns.stroke}
+        strokeWidth={1.5}
+        strokeDasharray={node.confidence === "low" ? "4 3" : undefined}
+        opacity={node.confidence === "low" ? 0.75 : 1}
       />
 
-      {/* текст */}
-      {!isEditing && (
+      {/* title */}
+      {tl.map((line, li) => (
         <text
-          x="0"
-          y="0"
-          textAnchor="middle"
-          dominantBaseline="middle"
-          fill={style.color}
-          fontSize="12"
-          style={{ pointerEvents: "none", userSelect: "none" }}
+          key={"t" + li}
+          x={-NW / 2 + 9}
+          y={TOP + PAD_TOP + TITLE_LH * 0.82 + li * TITLE_LH}
+          fill={ns.color}
+          fontSize={11}
+          fontWeight="700"
+          fontFamily="'Courier New', monospace"
+          style={{ pointerEvents: "none" }}
         >
-          {title}
+          {line}
         </text>
+      ))}
+
+      {/* divider */}
+      {nl.length > 0 && (
+        <line
+          x1={-NW / 2 + 9}
+          y1={TOP + PAD_TOP + tl.length * TITLE_LH + DIV_GAP}
+          x2={NW / 2 - 9}
+          y2={TOP + PAD_TOP + tl.length * TITLE_LH + DIV_GAP}
+          stroke={ns.stroke}
+          strokeWidth={0.5}
+          opacity={0.3}
+        />
       )}
 
-      {/* ✏️ режим редактирования */}
-      {isEditing && (
-        <foreignObject x={-75} y={-25} width={150} height={50}>
-          <textarea
-            autoFocus
-            defaultValue={title}
-            onChange={(e) => onChangeTitle(id, e.target.value)}
-            style={{
-              width: "100%",
-              height: "100%",
-              fontSize: "12px",
-              background: "#111",
-              color: "#fff",
-              border: "1px solid #555",
-              borderRadius: "6px",
-              resize: "none",
-              outline: "none",
-            }}
-          />
-        </foreignObject>
-      )}
+      {/* note */}
+      {nl.map((line, li) => {
+        const dy =
+          TOP +
+          PAD_TOP +
+          tl.length * TITLE_LH +
+          DIV_GAP +
+          DIV_H +
+          NOTE_GAP +
+          NOTE_LH * 0.82;
+
+        return (
+          <text
+            key={"n" + li}
+            x={-NW / 2 + 9}
+            y={dy + li * NOTE_LH}
+            fill={ns.color}
+            fontSize={9.5}
+            opacity={dark ? 0.62 : 0.75}
+            fontFamily="'Courier New', monospace"
+            style={{ pointerEvents: "none" }}
+          >
+            {line}
+          </text>
+        );
+      })}
+
+      {/* type label */}
+      <text
+        x={-NW / 2 + 7}
+        y={h / 2 - 3}
+        fill={ns.stroke}
+        fontSize={6.5}
+        opacity={0.35}
+        letterSpacing={1}
+        fontFamily="'Courier New', monospace"
+        style={{ pointerEvents: "none" }}
+      >
+        {node.type.toUpperCase()}
+      </text>
+
+      {/* confidence dot */}
+      <circle
+        cx={NW / 2 - 9}
+        cy={h / 2 - 6}
+        r={2.5}
+        fill={node.confidence === "high" ? ns.stroke : "none"}
+        stroke={ns.stroke}
+        strokeWidth={1}
+        opacity={0.38}
+        style={{ pointerEvents: "none" }}
+      />
     </g>
   );
 }
 
-// 🔥 КРИТИЧНО: мемоизация
+// 🔥 ключевая оптимизация
 export default React.memo(
   Node,
   (prev, next) => {
@@ -113,7 +192,9 @@ export default React.memo(
       prev.node === next.node &&
       prev.pos === next.pos &&
       prev.isSelected === next.isSelected &&
-      prev.isEditing === next.isEditing
+      prev.isNavSelected === next.isNavSelected &&
+      prev.isEditing === next.isEditing &&
+      prev.isNew === next.isNew
     );
   }
 );
