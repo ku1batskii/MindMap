@@ -301,7 +301,7 @@ export default function MindMap(){
     return()=>svg.removeEventListener("wheel",h);
   },[view,flushT]);
 
-// ── Pointer gestures (один и два пальца) ───────────────────────────────
+// ── Pointer gestures (one & two finger) ───────────────────────────────
 useEffect(() => {
   const svg = svgRef.current;
   if (!svg || view !== "map") return;
@@ -330,7 +330,6 @@ useEffect(() => {
     pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
 
     if (pointers.size === 1) {
-      // Один палец
       let el = e.target, nid = null;
       while (el && el !== svg) {
         if (el.dataset?.nodeid) {
@@ -347,8 +346,9 @@ useEffect(() => {
         const t = tfmRef.current;
         pan = { ox: t.x, oy: t.y, sx: e.clientX, sy: e.clientY, moved: false };
       }
-    } else if (pointers.size === 2) {
-      // Два пальца
+    }
+
+    if (pointers.size === 2) {
       drag = null;
       pan = null;
       lastMid = getMid();
@@ -365,28 +365,42 @@ useEffect(() => {
       const dx = e.clientX - drag.sx;
       const dy = e.clientY - drag.sy;
       if (Math.sqrt(dx * dx + dy * dy) > 4) drag.moved = true;
+
       const np = { x: drag.ox + dx, y: drag.oy + dy };
       posRef.current[drag.id] = np;
-      setPos((prev) => ({ ...prev, [drag.id]: np }));
-    } else if (pointers.size === 1 && pan) {
+      setPos(prev => ({ ...prev, [drag.id]: np }));
+    }
+
+    else if (pointers.size === 1 && pan) {
       const dx = e.clientX - pan.sx;
       const dy = e.clientY - pan.sy;
       if (Math.sqrt(dx * dx + dy * dy) > 2) pan.moved = true;
-      applyT({ ...tfmRef.current, x: pan.ox + dx, y: pan.oy + dy });
-    } else if (pointers.size === 2 && lastMid && lastDist) {
+
+      applyT({
+        ...tfmRef.current,
+        x: pan.ox + dx,
+        y: pan.oy + dy
+      });
+    }
+
+    else if (pointers.size === 2 && lastMid && lastDist) {
       const t = tfmRef.current;
       const mid = getMid();
       const dist = getDist();
+
       const rect = svg.getBoundingClientRect();
       const px = mid.x - rect.left;
       const py = mid.y - rect.top;
-      const scale = Math.min(5, Math.max(0.05, (t.scale * dist) / lastDist));
-      const factor = scale / t.scale;
+
+      const newScale = Math.min(5, Math.max(0.05, (t.scale * dist) / lastDist));
+      const factor = newScale / t.scale;
+
       applyT({
-        scale,
+        scale: newScale,
         x: px - factor * (px - t.x) + (mid.x - lastMid.x),
         y: py - factor * (py - t.y) + (mid.y - lastMid.y),
       });
+
       lastMid = mid;
       lastDist = dist;
     }
@@ -398,14 +412,17 @@ useEffect(() => {
 
     if (pointers.size === 0) {
       flushT(tfmRef.current);
+
       if (drag && !drag.moved && editModeRef.current && drag.id !== "ROOT") {
-        setSelId((prev) => (prev === drag.id ? null : drag.id));
+        setSelId(prev => (prev === drag.id ? null : drag.id));
         setEditId(null);
       }
+
       if (pan && !pan.moved && editModeRef.current) {
         setSelId(null);
         setEditId(null);
       }
+
       drag = null;
       pan = null;
       lastMid = null;
@@ -413,21 +430,17 @@ useEffect(() => {
     }
   };
 
-  const handlePointerDown = down;
-  const handlePointerMove = move;
-  const handlePointerUp = up;
-
-  svg.addEventListener("pointerdown", handlePointerDown, { passive: false });
-  svg.addEventListener("pointermove", handlePointerMove, { passive: false });
-  svg.addEventListener("pointerup", handlePointerUp, { passive: false });
-  svg.addEventListener("pointercancel", handlePointerUp, { passive: false });
+  svg.addEventListener("pointerdown", down, { passive: false });
+  svg.addEventListener("pointermove", move, { passive: false });
+  svg.addEventListener("pointerup", up, { passive: false });
+  svg.addEventListener("pointercancel", up, { passive: false });
 
   return () => {
-  svg.removeEventListener("pointerdown", handlePointerDown);
-  svg.removeEventListener("pointermove", handlePointerMove);
-  svg.removeEventListener("pointerup", handlePointerUp);
-  svg.removeEventListener("pointercancel", handlePointerUp);
-};
+    svg.removeEventListener("pointerdown", down);
+    svg.removeEventListener("pointermove", move);
+    svg.removeEventListener("pointerup", up);
+    svg.removeEventListener("pointercancel", up);
+  };
 }, [view, applyT, flushT]);
 
 // ── Process ────────────────────────────────────────────────────────────────
