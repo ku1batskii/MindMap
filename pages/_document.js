@@ -25,6 +25,9 @@ export default function Document() {
       <body>
         <Main />
         <NextScript />
+        
+        <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
+        <script>eruda.init();</script>
       </body>
     </Html>
   );
