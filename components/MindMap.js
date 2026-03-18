@@ -301,103 +301,115 @@ export default function MindMap(){
     return()=>svg.removeEventListener("wheel",h);
   },[view,flushT]);
 
-// ── Pointer gestures ───────────────────────────────────────────────────────
+// ── Pointer gestures (один и два пальца) ───────────────────────────────
 useEffect(() => {
   const svg = svgRef.current;
   if (!svg || view !== "map") return;
 
-  const ptrs = new Map();
-  let drag = null, pan = null, lm = null, ld = null;
+  const pointers = new Map();
+  let drag = null;
+  let pan = null;
+  let lastMid = null;
+  let lastDist = null;
 
-  const mid = () => {
-    const p = [...ptrs.values()];
-    return { x: (p[0].x + p[1].x) / 2, y: (p[0].y + p[1].y) / 2 };
+  const getMid = () => {
+    const [p1, p2] = [...pointers.values()];
+    return { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 };
   };
-  const pd = () => {
-    const p = [...ptrs.values()];
-    const dx = p[0].x - p[1].x, dy = p[0].y - p[1].y;
+
+  const getDist = () => {
+    const [p1, p2] = [...pointers.values()];
+    const dx = p1.x - p2.x;
+    const dy = p1.y - p2.y;
     return Math.sqrt(dx * dx + dy * dy);
   };
 
-  const down = e => {
-    console.log("Pointer down", e.pointerId, e.target.dataset?.nodeid);
+  const down = (e) => {
     e.preventDefault();
     svg.setPointerCapture(e.pointerId);
-    ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
 
-    if (ptrs.size === 1) {
-      // одиночное касание — drag node или pan
+    if (pointers.size === 1) {
+      // Один палец
       let el = e.target, nid = null;
       while (el && el !== svg) {
-        if (el.dataset?.nodeid) { nid = el.dataset.nodeid; break; }
+        if (el.dataset?.nodeid) {
+          nid = el.dataset.nodeid;
+          break;
+        }
         el = el.parentElement;
       }
+
       if (nid) {
         const p = posRef.current[nid] || { x: 0, y: 0 };
         drag = { id: nid, ox: p.x, oy: p.y, sx: e.clientX, sy: e.clientY, moved: false };
       } else {
         const t = tfmRef.current;
         pan = { ox: t.x, oy: t.y, sx: e.clientX, sy: e.clientY, moved: false };
-        lm = null; ld = null;
       }
-    } else if (ptrs.size === 2) {
-      // двухпальцевый жест — начальная точка для зума
-      drag = null; pan = null; lm = mid(); ld = pd();
+    } else if (pointers.size === 2) {
+      // Два пальца
+      drag = null;
+      pan = null;
+      lastMid = getMid();
+      lastDist = getDist();
     }
   };
 
-  const move = e => {
-    if (!ptrs.has(e.pointerId)) return;
-    console.log("Pointer move", e.pointerId);
+  const move = (e) => {
+    if (!pointers.has(e.pointerId)) return;
     e.preventDefault();
-    ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
 
-    if (ptrs.size === 1 && drag) {
-      // drag node
-      const dx = e.clientX - drag.sx, dy = e.clientY - drag.sy;
-      if (Math.sqrt(dx * dx + dy * dy) > 6) drag.moved = true;
+    if (pointers.size === 1 && drag) {
+      const dx = e.clientX - drag.sx;
+      const dy = e.clientY - drag.sy;
+      if (Math.sqrt(dx * dx + dy * dy) > 4) drag.moved = true;
       const np = { x: drag.ox + dx, y: drag.oy + dy };
       posRef.current[drag.id] = np;
-      setPos(prev => ({ ...prev, [drag.id]: np }));
-    } else if (ptrs.size === 1 && pan) {
-      // панорамирование
-      const dx = e.clientX - pan.sx, dy = e.clientY - pan.sy;
-      if (Math.sqrt(dx * dx + dy * dy) > 4) pan.moved = true;
+      setPos((prev) => ({ ...prev, [drag.id]: np }));
+    } else if (pointers.size === 1 && pan) {
+      const dx = e.clientX - pan.sx;
+      const dy = e.clientY - pan.sy;
+      if (Math.sqrt(dx * dx + dy * dy) > 2) pan.moved = true;
       applyT({ ...tfmRef.current, x: pan.ox + dx, y: pan.oy + dy });
-    } else if (ptrs.size === 2 && lm && ld) {
-      // двухпальцевый зум
-      const t = tfmRef.current, m = mid(), d = pd(), rect = svg.getBoundingClientRect();
-      const px = m.x - rect.left, py = m.y - rect.top;
-      const ns = Math.min(5, Math.max(0.05, t.scale * d / ld));
-      const sf = ns / t.scale;
-      applyT({ scale: ns, x: px - sf * (px - t.x) + (m.x - lm.x), y: py - sf * (py - t.y) + (m.y - lm.y) });
-      lm = m; ld = d;
+    } else if (pointers.size === 2 && lastMid && lastDist) {
+      const t = tfmRef.current;
+      const mid = getMid();
+      const dist = getDist();
+      const rect = svg.getBoundingClientRect();
+      const px = mid.x - rect.left;
+      const py = mid.y - rect.top;
+      const scale = Math.min(5, Math.max(0.05, (t.scale * dist) / lastDist));
+      const factor = scale / t.scale;
+      applyT({
+        scale,
+        x: px - factor * (px - t.x) + (mid.x - lastMid.x),
+        y: py - factor * (py - t.y) + (mid.y - lastMid.y),
+      });
+      lastMid = mid;
+      lastDist = dist;
     }
   };
 
-  const up = e => {
-    console.log("Pointer up", e.pointerId);
+  const up = (e) => {
     e.preventDefault();
-    ptrs.delete(e.pointerId);
+    pointers.delete(e.pointerId);
 
-    if (ptrs.size === 0) {
+    if (pointers.size === 0) {
       flushT(tfmRef.current);
       if (drag && !drag.moved && editModeRef.current && drag.id !== "ROOT") {
-        setSelId(prev => (prev === drag.id ? null : drag.id));
+        setSelId((prev) => (prev === drag.id ? null : drag.id));
         setEditId(null);
       }
       if (pan && !pan.moved && editModeRef.current) {
         setSelId(null);
         setEditId(null);
       }
-      drag = null; pan = null; lm = null; ld = null;
-    }
-
-    if (ptrs.size === 1) {
-      const [, rp] = [...ptrs.entries()][0];
-      const t = tfmRef.current;
-      pan = { ox: t.x, oy: t.y, sx: rp.x, sy: rp.y, moved: false };
-      lm = null; ld = null;
+      drag = null;
+      pan = null;
+      lastMid = null;
+      lastDist = null;
     }
   };
 
