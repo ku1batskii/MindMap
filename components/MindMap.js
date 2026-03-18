@@ -620,26 +620,50 @@ export default function MindMap(){
                 <text textAnchor="middle" dominantBaseline="middle" fill={C.accent} fontSize={11} fontFamily="'Courier New',monospace" style={{pointerEvents:"none"}}>{trunc(tree.goal,25)}</text>
               </g>
             )}
-            {tree.nodes.map(n=>{
-              const p=pos[n.id];if(!p)return null;
-              const ns=NS[n.type]||NS.idea,h=nh(n.title,n.note);
-              const tl=wrap(n.title||"",TITLE_MAX),nl=wrap(n.note||"",NOTE_MAX),TOP=-h/2;
-              const isNew=newIds.has(n.id);
-              const isSelNode=editMode&&selId===n.id;
-              const isNavSel=!editMode&&navSel===n.id;
-              return(
-                <g key={n.id} transform={`translate(${p.x},${p.y})`} style={{cursor:editMode?"pointer":"grab",...(isNew?{animation:"nodeIn 0.35s ease-out"}:{})}} data-nodeid={n.id}>
-                  {(isSelNode||isNavSel)&&<rect x={-NW/2-3} y={TOP-3} width={NW+6} height={h+6} rx={7} fill="none" stroke={C.accent} strokeWidth={2} opacity={0.85}/>}
-                  {editMode&&!isSelNode&&<rect x={-NW/2-2} y={TOP-2} width={NW+4} height={h+4} rx={7} fill="none" stroke={C.accentFaint} strokeWidth={1} strokeDasharray="4 3"/>}
-                  <rect x={-NW/2} y={TOP} width={NW} height={h} rx={6} fill={ns.fill} stroke={ns.stroke} strokeWidth={1.5} strokeDasharray={n.confidence==="low"?"4 3":undefined} opacity={n.confidence==="low"?0.75:1}/>
-                  {tl.map((line,li)=><text key={"t"+li} x={-NW/2+9} y={TOP+PAD_TOP+TITLE_LH*0.82+li*TITLE_LH} fill={ns.color} fontSize={11} fontWeight="700" fontFamily="'Courier New',monospace" style={{pointerEvents:"none"}}>{line}</text>)}
-                  {nl.length>0&&<line x1={-NW/2+9} y1={TOP+PAD_TOP+tl.length*TITLE_LH+DIV_GAP} x2={NW/2-9} y2={TOP+PAD_TOP+tl.length*TITLE_LH+DIV_GAP} stroke={ns.stroke} strokeWidth={0.5} opacity={0.3}/>}
-                  {nl.map((line,li)=>{const dy=TOP+PAD_TOP+tl.length*TITLE_LH+DIV_GAP+DIV_H+NOTE_GAP+NOTE_LH*0.82;return<text key={"n"+li} x={-NW/2+9} y={dy+li*NOTE_LH} fill={ns.color} fontSize={9.5} opacity={dark?0.62:0.75} fontFamily="'Courier New',monospace" style={{pointerEvents:"none"}}>{line}</text>;})}
-                  <text x={-NW/2+7} y={h/2-3} fill={ns.stroke} fontSize={6.5} opacity={0.35} letterSpacing={1} fontFamily="'Courier New',monospace" style={{pointerEvents:"none"}}>{n.type.toUpperCase()}</text>
-                  <circle cx={NW/2-9} cy={h/2-6} r={2.5} fill={n.confidence==="high"?ns.stroke:"none"} stroke={ns.stroke} strokeWidth={1} opacity={0.38} style={{pointerEvents:"none"}}/>
-                </g>
-              );
-            })}
+{tree.nodes.map((n) => {
+  const p = pos[n.id];
+  if (!p) return null;
+
+  return (
+    <Node
+      key={n.id}
+      node={n}
+      pos={p}
+
+      // состояния
+      isSelected={editMode && selId === n.id}
+      isNavSelected={!editMode && navSel === n.id}
+      isEditing={editId === n.id}
+      isNew={newIds.has(n.id)}
+
+      // конфиг
+      constants={{
+        NW,
+        PAD_TOP,
+        TITLE_LH,
+        NOTE_LH,
+        DIV_GAP,
+        DIV_H,
+        NOTE_GAP,
+        TITLE_MAX,
+        NOTE_MAX,
+      }}
+
+      theme={{
+        NS,
+        C,
+        dark,
+      }}
+
+      // функции
+      wrap={wrap}
+      nodeHeight={nh}
+
+      // события
+      onPointerDown={handlePointerDown}
+    />
+  );
+})}
           </g>
         </svg>
 
