@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { computeRadialLayout, fitAll, getTheme, DARK_STYLE, LIGHT_STYLE } from "../lib/mindmap-utils.js";
-import { useCanvasControls } from "../hooks/useCanvasControls.js";
 import { useMindMapEngine } from "../hooks/useMindMapEngine.js";
 import MindMapCanvas from "./MindMapCanvas.js";
 import { InputModal, SessionsSidebar, BusyOverlay, RelatedPanel, ReportModal } from "./UIOverlays.js";
@@ -13,7 +12,7 @@ export default function MindMap() {
   const C  = getTheme(dark);
   const NS = dark ? DARK_STYLE : LIGHT_STYLE;
 
-  // ── Log ──────────────────────────────────────────────────────────────────────
+  // ── Log ───────────────────────────────────────────────────────────────────
   const [log, setLog] = useState([
     { c:"s", t:"MIND MAP -- введи текст" },
     { c:"s", t:"/mock -- тест · /clear -- сброс" },
@@ -25,29 +24,38 @@ export default function MindMap() {
     setTimeout(() => { if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight; }, 30);
   }, []);
 
-  // ── Engine ───────────────────────────────────────────────────────────────────
+  // ── Engine ────────────────────────────────────────────────────────────────
   const engine = useMindMapEngine({ onLog });
 
-  // ── Canvas refs ───────────────────────────────────────────────────────────────
-  const svgRef = useRef(null);
-  const gRef   = useRef(null);
-  const [transform, setTransform]   = useState({ x:0, y:0, scale:1 });
-  const [pos, setPos]               = useState({});
-  const [newNodeIds, setNewNodeIds] = useState(new Set());
+  // ── Canvas state ──────────────────────────────────────────────────────────
+  const svgRef  = useRef(null);
+  const gRef    = useRef(null);
+  const [transform, setTransform]     = useState({ x:0, y:0, scale:1 });
+  const [pos, setPos]                 = useState({});
+  const [newNodeIds, setNewNodeIds]   = useState(new Set());
   const [busyVisible, setBusyVisible] = useState(false);
 
-  // ── Edit mode ─────────────────────────────────────────────────────────────────
-  const [editMode, setEditMode]         = useState(false);
+  // Transform ref — DOM updates without re-render during gesture
+  const transformRef = useRef({ x:0, y:0, scale:1 });
+  const applyT = t => {
+    transformRef.current = t;
+    if (gRef.current) gRef.current.style.transform = `translate(${t.x}px,${t.y}px) scale(${t.scale})`;
+  };
+  const flushT = t => { applyT(t); setTransform({ ...t }); };
+
+  // ── Edit mode ─────────────────────────────────────────────────────────────
+  const [editMode, setEditMode]             = useState(false);
   const [selectedNodeId, setSelectedNodeId] = useState(null);
-  // Inline text editing
   const [editingNodeId, setEditingNodeId]   = useState(null);
   const [editingText, setEditingText]       = useState("");
   const editInputRef = useRef(null);
+  const editModeRef  = useRef(false);
+  useEffect(() => { editModeRef.current = editMode; }, [editMode]);
 
-  // ── Node nav ──────────────────────────────────────────────────────────────────
+  // ── Nav selected ──────────────────────────────────────────────────────────
   const [navSelectedId, setNavSelectedId] = useState(null);
 
-  // ── Modals ────────────────────────────────────────────────────────────────────
+  // ── Modals ────────────────────────────────────────────────────────────────
   const [showSidebar,  setShowSidebar]  = useState(false);
   const [showFollowUp, setShowFollowUp] = useState(false);
   const [followText,   setFollowText]   = useState("");
@@ -55,39 +63,17 @@ export default function MindMap() {
   const [reportText,   setReportText]   = useState("");
   const [showRelated,  setShowRelated]  = useState(false);
 
-  // ── Canvas controls ───────────────────────────────────────────────────────────
-  const editModeRef = useRef(false);
-  useEffect(() => { editModeRef.current = editMode; }, [editMode]);
-
-  const { transformRef, posRef, onPosChange, flushTransform } = useCanvasControls({
-    svgRef, gRef,
-    onNodeTap: useCallback(id => {
-      if (!editModeRef.current) return;
-      if (id === "ROOT") return;
-      setSelectedNodeId(prev => prev === id ? null : id);
-      setEditingNodeId(null);
-    }, []),
-    onBackgroundTap: useCallback(() => {
-      if (!editModeRef.current) return;
-      setSelectedNodeId(null);
-      setEditingNodeId(null);
-    }, []),
-  });
-
-  onPosChange.current = (id, newP) => setPos(p => ({ ...p, [id]: newP }));
-
-  // ── Layout ────────────────────────────────────────────────────────────────────
+  // ── Layout ────────────────────────────────────────────────────────────────
   useEffect(() => {
     if (view !== "map") return;
     const run = () => {
       const svg = svgRef.current; if (!svg) return;
-      const rect = svg.getBoundingClientRect();
-      const w = rect.width  > 10 ? rect.width  : window.innerWidth;
-      const h = rect.height > 10 ? rect.height : window.innerHeight - 200;
+      const r = svg.getBoundingClientRect();
+      const w = r.width  > 10 ? r.width  : window.innerWidth;
+      const h = r.height > 10 ? r.height : window.innerHeight - 200;
       const newPos = computeRadialLayout(engine.tree, w, h);
-      posRef.current = newPos;
       setPos(newPos);
-      flushTransform(fitAll(newPos, w, h), setTransform);
+      flushT(fitAll(newPos, w, h));
     };
     run();
     const id = requestAnimationFrame(run);
@@ -96,175 +82,288 @@ export default function MindMap() {
 
   const fit = useCallback(() => {
     const svg = svgRef.current; if (!svg) return;
-    const rect = svg.getBoundingClientRect();
-    const W = rect.width  > 10 ? rect.width  : window.innerWidth;
-    const H = rect.height > 10 ? rect.height : window.innerHeight - 200;
-    flushTransform(fitAll(posRef.current, W, H), setTransform);
-  }, [flushTransform, posRef]);
+    const r = svg.getBoundingClientRect();
+    const w = r.width  > 10 ? r.width  : window.innerWidth;
+    const h = r.height > 10 ? r.height : window.innerHeight - 200;
+    flushT(fitAll(pos, w, h));
+  }, [pos]);
 
-  // ── Node nav ──────────────────────────────────────────────────────────────────
+  // ── Wheel zoom ────────────────────────────────────────────────────────────
+  useEffect(() => {
+    const svg = svgRef.current; if (!svg || view !== "map") return;
+    const handler = e => {
+      e.preventDefault();
+      const t = transformRef.current, f = e.deltaY < 0 ? 1.1 : 0.91;
+      const rect = svg.getBoundingClientRect();
+      const px = e.clientX - rect.left, py = e.clientY - rect.top;
+      const ns = Math.min(5, Math.max(0.05, t.scale * f));
+      flushT({ scale:ns, x:px-(ns/t.scale)*(px-t.x), y:py-(ns/t.scale)*(py-t.y) });
+    };
+    svg.addEventListener("wheel", handler, { passive:false });
+    return () => svg.removeEventListener("wheel", handler);
+  }, [view]);
+
+  // ── Pointer gestures ──────────────────────────────────────────────────────
+  useEffect(() => {
+    const svg = svgRef.current; if (!svg || view !== "map") return;
+
+    const ptrs = new Map();
+    const mid = () => { const p=[...ptrs.values()]; return {x:(p[0].x+p[1].x)/2,y:(p[0].y+p[1].y)/2}; };
+    const pd  = () => { const p=[...ptrs.values()]; const dx=p[0].x-p[1].x,dy=p[0].y-p[1].y; return Math.sqrt(dx*dx+dy*dy); };
+
+    // mutable state — lives inside the effect closure
+    let drag=null, pan=null, lm=null, ld=null;
+
+    const down = e => {
+      e.preventDefault();
+      svg.setPointerCapture(e.pointerId);
+      ptrs.set(e.pointerId, {x:e.clientX,y:e.clientY});
+
+      if (ptrs.size === 1) {
+        // find node
+        let el=e.target, nid=null;
+        while (el && el!==svg) { if (el.dataset?.nodeid){nid=el.dataset.nodeid;break;} el=el.parentElement; }
+
+        if (nid) {
+          // get latest pos from DOM state via closure ref below
+          setPos(prev => {
+            const p = prev[nid] || {x:0,y:0};
+            drag = {id:nid, ox:p.x, oy:p.y, sx:e.clientX, sy:e.clientY, moved:false};
+            return prev;
+          });
+        } else {
+          const t = transformRef.current;
+          pan = {ox:t.x, oy:t.y, sx:e.clientX, sy:e.clientY, moved:false};
+          lm=null; ld=null;
+        }
+      } else if (ptrs.size === 2) {
+        drag=null; pan=null; lm=mid(); ld=pd();
+      }
+    };
+
+    const move = e => {
+      if (!ptrs.has(e.pointerId)) return;
+      e.preventDefault();
+      ptrs.set(e.pointerId, {x:e.clientX,y:e.clientY});
+
+      if (ptrs.size===1 && drag) {
+        const dx=e.clientX-drag.sx, dy=e.clientY-drag.sy;
+        if (Math.sqrt(dx*dx+dy*dy)>6) drag.moved=true;
+        setPos(prev => ({...prev, [drag.id]:{x:drag.ox+dx, y:drag.oy+dy}}));
+
+      } else if (ptrs.size===1 && pan) {
+        const dx=e.clientX-pan.sx, dy=e.clientY-pan.sy;
+        if (Math.sqrt(dx*dx+dy*dy)>4) pan.moved=true;
+        applyT({...transformRef.current, x:pan.ox+dx, y:pan.oy+dy});
+
+      } else if (ptrs.size===2 && lm && ld) {
+        const t=transformRef.current, m=mid(), d=pd(), rect=svg.getBoundingClientRect();
+        const px=m.x-rect.left, py=m.y-rect.top;
+        const ns=Math.min(5,Math.max(0.05,t.scale*d/ld)), sf=ns/t.scale;
+        applyT({scale:ns, x:px-sf*(px-t.x)+(m.x-lm.x), y:py-sf*(py-t.y)+(m.y-lm.y)});
+        lm=m; ld=d;
+      }
+    };
+
+    const up = e => {
+      e.preventDefault();
+      ptrs.delete(e.pointerId);
+
+      if (ptrs.size === 0) {
+        // flush to React state
+        flushT(transformRef.current);
+
+        // tap detection
+        if (drag && !drag.moved && editModeRef.current && drag.id !== "ROOT") {
+          setSelectedNodeId(prev => prev===drag.id ? null : drag.id);
+          setEditingNodeId(null);
+        }
+        if (pan && !pan.moved && editModeRef.current) {
+          setSelectedNodeId(null);
+          setEditingNodeId(null);
+        }
+
+        drag=null; pan=null; lm=null; ld=null;
+      }
+
+      if (ptrs.size===1) {
+        const [,rp]=[...ptrs.entries()][0];
+        const t=transformRef.current;
+        pan={ox:t.x, oy:t.y, sx:rp.x, sy:rp.y, moved:false};
+        lm=null; ld=null;
+      }
+    };
+
+    svg.addEventListener("pointerdown",   down, {passive:false});
+    svg.addEventListener("pointermove",   move, {passive:false});
+    svg.addEventListener("pointerup",     up,   {passive:false});
+    svg.addEventListener("pointercancel", up,   {passive:false});
+    return () => {
+      svg.removeEventListener("pointerdown",   down);
+      svg.removeEventListener("pointermove",   move);
+      svg.removeEventListener("pointerup",     up);
+      svg.removeEventListener("pointercancel", up);
+    };
+  }, [view]);
+
+  // ── Node nav ──────────────────────────────────────────────────────────────
   const getNavOrder = useCallback(() => {
-    const order = [], visited = new Set();
+    const order=[], visited=new Set();
     const bfs = ids => {
       if (!ids.length) return;
-      const next = [];
-      ids.forEach(id => {
+      const next=[];
+      ids.forEach(id=>{
         if (visited.has(id)) return;
         visited.add(id); order.push(id);
-        engine.tree.nodes.filter(c => c.parentId === id).forEach(c => next.push(c.id));
+        engine.tree.nodes.filter(c=>c.parentId===id).forEach(c=>next.push(c.id));
       });
       bfs(next);
     };
-    bfs(engine.tree.nodes.filter(n => !n.parentId).map(n => n.id));
+    bfs(engine.tree.nodes.filter(n=>!n.parentId).map(n=>n.id));
     return order;
   }, [engine.tree]);
 
   const focusNode = useCallback(id => {
-    const svg = svgRef.current; if (!svg) return;
-    const p = posRef.current[id]; if (!p) return;
-    const rect = svg.getBoundingClientRect();
-    const W = rect.width > 10 ? rect.width : window.innerWidth;
-    const H = rect.height > 10 ? rect.height : window.innerHeight - 200;
-    const sc = 1.55;
-    flushTransform({ x: W/2 - sc*p.x, y: H/2 - sc*p.y, scale: sc }, setTransform);
+    const svg=svgRef.current; if (!svg) return;
+    const p=pos[id]; if (!p) return;
+    const r=svg.getBoundingClientRect();
+    const W=r.width>10?r.width:window.innerWidth;
+    const H=r.height>10?r.height:window.innerHeight-200;
+    const sc=1.55;
+    flushT({x:W/2-sc*p.x, y:H/2-sc*p.y, scale:sc});
     setNavSelectedId(id);
-  }, [flushTransform, posRef]);
+  }, [pos]);
 
   const navNode = useCallback(dir => {
-    const order = getNavOrder(); if (!order.length) return;
-    const cur  = order.indexOf(navSelectedId);
-    const next = cur === -1 ? (dir > 0 ? 0 : order.length - 1) : (cur + dir + order.length) % order.length;
+    const order=getNavOrder(); if (!order.length) return;
+    const cur=order.indexOf(navSelectedId);
+    const next=cur===-1?(dir>0?0:order.length-1):(cur+dir+order.length)%order.length;
     focusNode(order[next]);
   }, [getNavOrder, navSelectedId, focusNode]);
 
-  // ── Busy fade ──────────────────────────────────────────────────────────────────
-  useEffect(() => {
+  // ── Busy ──────────────────────────────────────────────────────────────────
+  useEffect(()=>{
     if (engine.busy) setBusyVisible(true);
-    else { const t = setTimeout(() => setBusyVisible(false), 600); return () => clearTimeout(t); }
-  }, [engine.busy]);
+    else { const t=setTimeout(()=>setBusyVisible(false),600); return ()=>clearTimeout(t); }
+  },[engine.busy]);
 
-  // ── Process with animation ────────────────────────────────────────────────────
+  // ── Process ───────────────────────────────────────────────────────────────
   const processWithAnim = useCallback(async val => {
     const freshIds = await engine.process(val);
     if (freshIds?.length) {
       setNewNodeIds(new Set(freshIds));
-      setTimeout(() => setNewNodeIds(new Set()), 600);
+      setTimeout(()=>setNewNodeIds(new Set()),600);
     }
   }, [engine]);
 
-  // ── Inline text editing ───────────────────────────────────────────────────────
+  // ── Inline edit ───────────────────────────────────────────────────────────
   const startEditText = useCallback(() => {
     if (!selectedNodeId) return;
-    const node = engine.treeRef.current.nodes.find(n => n.id === selectedNodeId);
+    const node = engine.treeRef.current.nodes.find(n=>n.id===selectedNodeId);
     if (!node) return;
-    setEditingText(node.note || "");
+    setEditingText(node.note||"");
     setEditingNodeId(selectedNodeId);
-    setTimeout(() => editInputRef.current?.focus(), 80);
+    setTimeout(()=>editInputRef.current?.focus(),80);
   }, [selectedNodeId, engine.treeRef]);
 
   const commitEditText = useCallback(() => {
-    if (editingNodeId) {
-      engine.editNodeNote(editingNodeId, editingText);
-    }
+    if (editingNodeId) engine.editNodeNote(editingNodeId, editingText);
     setEditingNodeId(null);
   }, [editingNodeId, editingText, engine]);
 
-  // ── Save / export ─────────────────────────────────────────────────────────────
+  // ── Save / export ─────────────────────────────────────────────────────────
   const saveMap = useCallback(async () => {
     if (!engine.tree.nodes.length) return;
     try {
-      const res = await fetch("/api/save", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ tree: engine.tree, pos }) });
-      const data = await res.json();
-      onLog("o", "✓ /view/" + data.slug);
-      try { await navigator.clipboard.writeText(window.location.origin + "/view/" + data.slug); } catch {}
-    } catch (e) { onLog("e", "ERR save: " + e.message); }
-  }, [engine.tree, pos, onLog]);
+      const res=await fetch("/api/save",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({tree:engine.tree,pos})});
+      const data=await res.json();
+      onLog("o","✓ /view/"+data.slug);
+      try{await navigator.clipboard.writeText(window.location.origin+"/view/"+data.slug);}catch{}
+    } catch(e){onLog("e","ERR save: "+e.message);}
+  },[engine.tree,pos,onLog]);
 
-  const exportSVG = useCallback(() => {
-    const svg = svgRef.current; if (!svg) return;
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(new Blob([new XMLSerializer().serializeToString(svg)], { type:"image/svg+xml" }));
-    a.download = (engine.tree.goal || "mindmap").replace(/\s+/g, "_") + ".svg";
+  const exportSVG = useCallback(()=>{
+    const svg=svgRef.current; if(!svg) return;
+    const a=document.createElement("a");
+    a.href=URL.createObjectURL(new Blob([new XMLSerializer().serializeToString(svg)],{type:"image/svg+xml"}));
+    a.download=(engine.tree.goal||"mindmap").replace(/\s+/g,"_")+".svg";
     a.click(); URL.revokeObjectURL(a.href);
-  }, [engine.tree.goal]);
+  },[engine.tree.goal]);
 
-  const logColor = { b:"#ffdd44", s:"rgba(0,255,136,0.6)", u:"#00ccee", e:"#ff5566", o:"#00ff88" };
-  const TOOLBAR_H = 44;
+  const logColor={b:"#ffdd44",s:"rgba(0,255,136,0.6)",u:"#00ccee",e:"#ff5566",o:"#00ff88"};
+  const TOOLBAR_H=44;
 
-  // Pill button styles
-  const pillBtn = (disabled = false, active = false) => ({
-    width:36, height:36, borderRadius:6,
-    background: active ? (dark ? "rgba(0,255,136,0.12)" : "rgba(0,80,30,0.1)") : "none",
-    border:"none", cursor: disabled ? "default" : "pointer",
-    color: disabled ? C.accentFaint : (active ? C.accent : C.accentDim),
-    display:"flex", alignItems:"center", justifyContent:"center",
-    opacity: disabled ? 0.3 : 1, transition:"all 0.15s", flexShrink:0,
-  });
-
-  const iconBtn = () => ({
-    width:28, height:28, borderRadius:5, background:"none", border:"none",
-    cursor:"pointer", color:C.accentDim, display:"flex", alignItems:"center", justifyContent:"center",
-  });
-
-  // Toolbar glass container
-  const glassStyle = {
-    background: dark ? "rgba(9,9,9,0.88)" : "rgba(240,247,240,0.88)",
-    backdropFilter:"blur(14px)", WebkitBackdropFilter:"blur(14px)",
-    border:`1px solid ${C.border}`, borderRadius:8,
+  const glass={
+    background:dark?"rgba(9,9,9,0.88)":"rgba(240,247,240,0.88)",
+    backdropFilter:"blur(14px)",WebkitBackdropFilter:"blur(14px)",
+    border:`1px solid ${C.border}`,borderRadius:8,
   };
 
-  // ── INPUT VIEW ────────────────────────────────────────────────────────────────
+  const pillBtn=(disabled=false,active=false)=>({
+    width:36,height:36,borderRadius:6,
+    background:active?(dark?"rgba(0,255,136,0.12)":"rgba(0,80,30,0.1)"):"none",
+    border:"none",cursor:disabled?"default":"pointer",
+    color:disabled?C.accentFaint:(active?C.accent:C.accentDim),
+    display:"flex",alignItems:"center",justifyContent:"center",
+    opacity:disabled?0.3:1,transition:"all 0.15s",flexShrink:0,
+  });
+
+  const iconBtn=()=>({
+    width:28,height:28,borderRadius:5,background:"none",border:"none",
+    cursor:"pointer",color:C.accentDim,display:"flex",alignItems:"center",justifyContent:"center",
+  });
+
+  // ── INPUT SCREEN ──────────────────────────────────────────────────────────
   if (view === "input") {
     return (
       <>
         <InputModal
           value={inputText} onChange={setInputText}
-          onSubmit={() => {
-            if (!inputText.trim() || engine.busy) return;
-            const v = inputText; setInputText("");
-            setView("map"); setTimeout(() => processWithAnim(v), 80);
+          onSubmit={()=>{
+            if (!inputText.trim()||engine.busy) return;
+            const v=inputText; setInputText("");
+            setView("map"); setTimeout(()=>processWithAnim(v),80);
           }}
           onClose={null} busy={engine.busy} isHome={true} theme={theme}
-          onThemeToggle={() => setTheme(t => t === "dark" ? "light" : "dark")}
+          onThemeToggle={()=>setTheme(t=>t==="dark"?"light":"dark")}
         />
-        <style>{`* { box-sizing:border-box; } textarea::placeholder { color:${dark ? "rgba(0,255,136,0.3)" : "rgba(0,100,40,0.4)"}; }`}</style>
+        <style>{`*{box-sizing:border-box;}textarea::placeholder{color:${dark?"rgba(0,255,136,0.3)":"rgba(0,100,40,0.4)"}}`}</style>
       </>
     );
   }
 
-  // ── MAP VIEW ──────────────────────────────────────────────────────────────────
+  // ── MAP SCREEN ────────────────────────────────────────────────────────────
   return (
-    <div style={{ background:C.bg, color:C.text, fontFamily:"'Courier New',monospace", height:"100dvh", display:"flex", flexDirection:"column", overflow:"hidden" }}>
+    <div style={{background:C.bg,color:C.text,fontFamily:"'Courier New',monospace",height:"100dvh",display:"flex",flexDirection:"column",overflow:"hidden"}}>
 
-      {/* Floating top bar */}
-      <div style={{ position:"absolute", top:0, left:0, right:0, zIndex:30, display:"flex", alignItems:"flex-start", justifyContent:"space-between", padding:"14px 14px 0", pointerEvents:"none" }}>
-        <button onClick={() => setShowSidebar(true)}
-          style={{ ...glassStyle, width:36, height:36, border:`1px solid ${C.border}`, color:C.accentDim, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", pointerEvents:"all" }}>
+      {/* Top bar */}
+      <div style={{position:"absolute",top:0,left:0,right:0,zIndex:30,display:"flex",alignItems:"flex-start",justifyContent:"space-between",padding:"14px 14px 0",pointerEvents:"none"}}>
+        <button onClick={()=>setShowSidebar(true)}
+          style={{...glass,width:36,height:36,color:C.accentDim,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",pointerEvents:"all"}}>
           <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
             <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>
           </svg>
         </button>
-
-        <div style={{ display:"flex", gap:1, ...glassStyle, padding:"4px 5px", pointerEvents:"all" }}>
+        <div style={{display:"flex",gap:1,...glass,borderRadius:6,padding:"4px 5px",pointerEvents:"all"}}>
           <button onClick={exportSVG} style={iconBtn()}>
             <svg width="12" height="12" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
           </button>
-          <button onClick={() => setTheme(t => t === "dark" ? "light" : "dark")} style={iconBtn()}>
-            {dark ? <svg width="11" height="11" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
-                   : <svg width="11" height="11" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg>}
+          <button onClick={()=>setTheme(t=>t==="dark"?"light":"dark")} style={iconBtn()}>
+            {dark?<svg width="11" height="11" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+                 :<svg width="11" height="11" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg>}
           </button>
-          <button onClick={() => setShowReport(true)} style={iconBtn()}>
+          <button onClick={()=>setShowReport(true)} style={iconBtn()}>
             <svg width="11" height="11" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
           </button>
           <button onClick={saveMap} disabled={!engine.tree.nodes.length}
-            style={{ ...iconBtn(), color: engine.tree.nodes.length ? C.accentDim : C.accentFaint, cursor: engine.tree.nodes.length ? "pointer" : "default" }}>
+            style={{...iconBtn(),color:engine.tree.nodes.length?C.accentDim:C.accentFaint,cursor:engine.tree.nodes.length?"pointer":"default"}}>
             <svg width="11" height="11" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><polyline points="17,21 17,13 7,13 7,21"/><polyline points="7,3 7,8 15,8"/></svg>
           </button>
         </div>
       </div>
 
       {/* Canvas */}
-      <div style={{ flex:1, overflow:"hidden", position:"relative" }}>
+      <div style={{flex:1,overflow:"hidden",position:"relative"}}>
         <MindMapCanvas
           svgRef={svgRef} gRef={gRef} transform={transform}
           tree={engine.tree} pos={pos}
@@ -273,96 +372,74 @@ export default function MindMap() {
           editMode={editMode} dark={dark} C={C} NS={NS}
         />
 
-        {/* Inline text editor overlay */}
+        {/* Inline text editor */}
         {editingNodeId && pos[editingNodeId] && (
           <div style={{
             position:"absolute",
-            left: (pos[editingNodeId].x * transform.scale + transform.x) - 79,
-            top:  (pos[editingNodeId].y * transform.scale + transform.y) - 40,
-            width: 158, zIndex:50,
+            left:(pos[editingNodeId].x*transform.scale+transform.x)-79,
+            top: (pos[editingNodeId].y*transform.scale+transform.y)-40,
+            width:158,zIndex:50,
           }}>
             <textarea
               ref={editInputRef}
               value={editingText}
-              onChange={e => setEditingText(e.target.value)}
+              onChange={e=>setEditingText(e.target.value)}
               onBlur={commitEditText}
-              onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); commitEditText(); } if (e.key === "Escape") { setEditingNodeId(null); } }}
+              onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();commitEditText();}if(e.key==="Escape")setEditingNodeId(null);}}
               rows={4}
-              style={{
-                width:"100%", background: dark ? "rgba(10,20,10,0.97)" : "rgba(240,255,240,0.97)",
-                border:`1.5px solid ${C.accent}`, borderRadius:6,
-                color:C.text, fontFamily:"'Courier New',monospace", fontSize:11,
-                padding:"8px", outline:"none", resize:"none",
-                caretColor:C.accent, lineHeight:1.5,
-                boxShadow:`0 0 12px ${C.accent}44`,
-              }}
+              style={{width:"100%",background:dark?"rgba(10,20,10,0.97)":"rgba(240,255,240,0.97)",border:`1.5px solid ${C.accent}`,borderRadius:6,color:C.text,fontFamily:"'Courier New',monospace",fontSize:11,padding:"8px",outline:"none",resize:"none",caretColor:C.accent,lineHeight:1.5,boxShadow:`0 0 12px ${C.accent}44`}}
             />
           </div>
         )}
 
-        {/* Bottom toolbar row */}
-        <div style={{
-          position:"absolute", bottom:36, left:0, right:0,
-          display:"flex", alignItems:"center", justifyContent:"center",
-          gap:8, paddingLeft:14, paddingRight:14,
-          zIndex:20, pointerEvents:"none",
-        }}>
+        {/* Bottom toolbar */}
+        <div style={{position:"absolute",bottom:36,left:0,right:0,display:"flex",alignItems:"center",justifyContent:"center",gap:8,paddingLeft:14,paddingRight:14,zIndex:20,pointerEvents:"none"}}>
+
           {/* Star */}
-          <button onClick={() => { engine.fetchRelated(); setShowRelated(true); }}
-            style={{ width:TOOLBAR_H, height:TOOLBAR_H, borderRadius:8, flexShrink:0, ...glassStyle, color:C.accentDim, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", pointerEvents:"all" }}>
+          <button onClick={()=>{engine.fetchRelated();setShowRelated(true);}}
+            style={{width:TOOLBAR_H,height:TOOLBAR_H,borderRadius:8,flexShrink:0,...glass,color:C.accentDim,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",pointerEvents:"all"}}>
             <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
               <polygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26"/>
             </svg>
           </button>
 
-          {/* Pill toolbar */}
-          <div style={{ height:TOOLBAR_H, display:"flex", alignItems:"center", ...glassStyle, padding:"0 8px", pointerEvents:"all" }}>
-
+          {/* Pill */}
+          <div style={{height:TOOLBAR_H,display:"flex",alignItems:"center",...glass,padding:"0 8px",pointerEvents:"all"}}>
             {editMode && selectedNodeId ? (
-              /* ── Edit node mode: DEL | T | divider | ← → ── */
               <>
                 {/* DEL */}
-                <button
-                  onClick={() => { engine.deleteNode(selectedNodeId); setSelectedNodeId(null); }}
-                  style={{ ...pillBtn(), color:"#ff4477" }}
-                  title="Delete node">
+                <button onClick={()=>{engine.deleteNode(selectedNodeId);setSelectedNodeId(null);}} style={{...pillBtn(),color:"#ff4477"}}>
                   <svg width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                    <polyline points="3,6 5,6 21,6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/>
+                    <polyline points="3,6 5,6 21,6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6M14 11v6M9 6V4h6v2"/>
                   </svg>
                 </button>
-                {/* T — edit text */}
-                <button
-                  onClick={startEditText}
-                  style={pillBtn(false, editingNodeId === selectedNodeId)}
-                  title="Edit text">
+                {/* T */}
+                <button onClick={startEditText} style={pillBtn(false, editingNodeId===selectedNodeId)}>
                   <svg width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                     <polyline points="4,7 4,4 20,4 20,7"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/>
                   </svg>
                 </button>
-                <div style={{ width:1, height:20, background:C.border, margin:"0 3px" }}/>
-                <button onClick={() => navNode(-1)} style={pillBtn(!engine.tree.nodes.length)}>
+                <div style={{width:1,height:20,background:C.border,margin:"0 3px"}}/>
+                <button onClick={()=>navNode(-1)} style={pillBtn(!engine.tree.nodes.length)}>
                   <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
                 </button>
-                <button onClick={() => navNode(1)} style={pillBtn(!engine.tree.nodes.length)}>
+                <button onClick={()=>navNode(1)} style={pillBtn(!engine.tree.nodes.length)}>
                   <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
                 </button>
               </>
             ) : (
-              /* ── Normal mode: fit | edit | divider | ← → ── */
               <>
                 <button onClick={fit} style={pillBtn()}>
                   <svg width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24"><path d="M8 3H5a2 2 0 00-2 2v3M21 8V5a2 2 0 00-2-2h-3M16 21h3a2 2 0 002-2v-3M3 16v3a2 2 0 002 2h3"/></svg>
                 </button>
-                <button
-                  onClick={() => { setEditMode(m => !m); setSelectedNodeId(null); setEditingNodeId(null); }}
-                  style={pillBtn(false, editMode)}>
+                <button onClick={()=>{setEditMode(m=>!m);setSelectedNodeId(null);setEditingNodeId(null);}} style={pillBtn(false,editMode)}>
                   <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
                 </button>
-                <div style={{ width:1, height:20, background:C.border, margin:"0 3px" }}/>
-                <button onClick={() => navNode(-1)} style={pillBtn(!engine.tree.nodes.length)}>
+                <div style={{width:1,height:20,background:C.border,margin:"0 3px"}}/>
+                <button onClick={()=>navNode(-1)} style={pillBtn(!engine.tree.nodes.length)}>
                   <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
                 </button>
-                <button onClick={() => navNode(1)} style={pillBtn(!engine.tree.nodes.length)}>
+                <button onClick={()=>navNode(1)} style={pillBtn(!engine.tree.nodes.length)}>
                   <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
                 </button>
               </>
@@ -374,65 +451,62 @@ export default function MindMap() {
       </div>
 
       {/* Log */}
-      <div ref={logRef} style={{ borderTop:`1px solid ${C.border}`, background:C.bgSub, maxHeight:"12vh", overflowY:"auto", padding:"4px 14px", flexShrink:0 }}>
-        {log.map((l, i) => (
-          <div key={i} style={{ fontSize:10, lineHeight:1.6, color: logColor[l.c] || "#aaa" }}>
-            {l.t}{l.c === "b" && <span style={{ animation:"blink 0.5s step-end infinite" }}> ...</span>}
+      <div ref={logRef} style={{borderTop:`1px solid ${C.border}`,background:C.bgSub,maxHeight:"12vh",overflowY:"auto",padding:"4px 14px",flexShrink:0}}>
+        {log.map((l,i)=>(
+          <div key={i} style={{fontSize:10,lineHeight:1.6,color:logColor[l.c]||"#aaa"}}>
+            {l.t}{l.c==="b"&&<span style={{animation:"blink 0.5s step-end infinite"}}> ...</span>}
           </div>
         ))}
       </div>
 
       {/* Follow-up bar */}
-      <div style={{ display:"flex", alignItems:"center", gap:8, padding:"8px 14px calc(8px + env(safe-area-inset-bottom)) 14px", borderTop:`1px solid ${C.border}`, background:C.bgSub, flexShrink:0 }}>
+      <div style={{display:"flex",alignItems:"center",gap:8,padding:"8px 14px calc(8px + env(safe-area-inset-bottom)) 14px",borderTop:`1px solid ${C.border}`,background:C.bgSub,flexShrink:0}}>
         <button onClick={engine.navBack} disabled={!engine.canBack}
-          style={{ background:"transparent", border:"none", color: engine.canBack ? C.accentDim : C.accentFaint, fontSize:18, cursor: engine.canBack ? "pointer" : "default", padding:"0 2px", lineHeight:1 }}>←</button>
+          style={{background:"transparent",border:"none",color:engine.canBack?C.accentDim:C.accentFaint,fontSize:18,cursor:engine.canBack?"pointer":"default",padding:"0 2px",lineHeight:1}}>←</button>
         <button onClick={engine.navForward} disabled={!engine.canFwd}
-          style={{ background:"transparent", border:"none", color: engine.canFwd ? C.accentDim : C.accentFaint, fontSize:18, cursor: engine.canFwd ? "pointer" : "default", padding:"0 2px", lineHeight:1 }}>→</button>
-        <button onClick={() => { setFollowText(""); setShowFollowUp(true); }}
-          style={{ flex:1, background:C.cardBg, border:`1px solid ${C.border}`, color:C.textDim, fontFamily:"'Courier New',monospace", fontSize:13, padding:"10px 12px", cursor:"text", textAlign:"left", outline:"none", borderRadius:4 }}>
-          {engine.busy ? "…" : "ask follow-up…"}
+          style={{background:"transparent",border:"none",color:engine.canFwd?C.accentDim:C.accentFaint,fontSize:18,cursor:engine.canFwd?"pointer":"default",padding:"0 2px",lineHeight:1}}>→</button>
+        <button onClick={()=>{setFollowText("");setShowFollowUp(true);}}
+          style={{flex:1,background:C.cardBg,border:`1px solid ${C.border}`,color:C.textDim,fontFamily:"'Courier New',monospace",fontSize:13,padding:"10px 12px",cursor:"text",textAlign:"left",outline:"none",borderRadius:4}}>
+          {engine.busy?"…":"ask follow-up…"}
         </button>
-        <button onClick={() => { setFollowText(""); setShowFollowUp(true); }}
-          style={{ width:36, height:36, borderRadius:6, background:"transparent", border:`1px solid ${C.accentDim}`, color:C.accentDim, display:"flex", alignItems:"center", justifyContent:"center", cursor:"pointer", flexShrink:0 }}>
+        <button onClick={()=>{setFollowText("");setShowFollowUp(true);}}
+          style={{width:36,height:36,borderRadius:6,background:"transparent",border:`1px solid ${C.accentDim}`,color:C.accentDim,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",flexShrink:0}}>
           <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
         </button>
       </div>
 
       {/* Overlays */}
-      {showFollowUp && (
+      {showFollowUp&&(
         <InputModal value={followText} onChange={setFollowText}
-          onSubmit={() => { if (!followText.trim() || engine.busy) return; const v = followText; setFollowText(""); setShowFollowUp(false); processWithAnim(v); }}
-          onClose={() => setShowFollowUp(false)} busy={engine.busy} isHome={false} theme={theme}
-          onThemeToggle={() => setTheme(t => t === "dark" ? "light" : "dark")}/>
+          onSubmit={()=>{if(!followText.trim()||engine.busy)return;const v=followText;setFollowText("");setShowFollowUp(false);processWithAnim(v);}}
+          onClose={()=>setShowFollowUp(false)} busy={engine.busy} isHome={false} theme={theme}
+          onThemeToggle={()=>setTheme(t=>t==="dark"?"light":"dark")}/>
       )}
-
-      {showSidebar && (
+      {showSidebar&&(
         <SessionsSidebar sessions={engine.sessions}
-          onSelect={s => { engine.loadSession(s); setShowSidebar(false); setView("map"); }}
+          onSelect={s=>{engine.loadSession(s);setShowSidebar(false);setView("map");}}
           onDelete={engine.removeSession}
-          onClose={() => setShowSidebar(false)}
-          onNew={() => { setShowSidebar(false); setView("input"); setInputText(""); }}
+          onClose={()=>setShowSidebar(false)}
+          onNew={()=>{setShowSidebar(false);setView("input");setInputText("");}}
           theme={theme}/>
       )}
-
-      {showRelated && (
+      {showRelated&&(
         <RelatedPanel topics={engine.relatedList} loading={engine.relatedLoad}
-          onSelect={t => { setShowRelated(false); setTimeout(() => processWithAnim(t), 50); }}
-          onClose={() => setShowRelated(false)} C={C}/>
+          onSelect={t=>{setShowRelated(false);setTimeout(()=>processWithAnim(t),50);}}
+          onClose={()=>setShowRelated(false)} C={C}/>
       )}
-
-      {showReport && (
+      {showReport&&(
         <ReportModal value={reportText} onChange={setReportText}
-          onSubmit={() => { setShowReport(false); setReportText(""); onLog("o", "✓ report sent"); }}
-          onClose={() => setShowReport(false)} C={C}/>
+          onSubmit={()=>{setShowReport(false);setReportText("");onLog("o","✓ report sent");}}
+          onClose={()=>setShowReport(false)} C={C}/>
       )}
 
       <style>{`
-        @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
-        @keyframes nodeIn { from{opacity:0;transform:scale(0.5)} to{opacity:1;transform:scale(1)} }
-        * { box-sizing:border-box; }
-        input::placeholder, textarea::placeholder { color:rgba(0,255,136,0.3); }
-        button { outline:none; }
+        @keyframes blink{0%,100%{opacity:1}50%{opacity:0}}
+        @keyframes nodeIn{from{opacity:0;transform:scale(0.5)}to{opacity:1;transform:scale(1)}}
+        *{box-sizing:border-box;}
+        input::placeholder,textarea::placeholder{color:rgba(0,255,136,0.3);}
+        button{outline:none;}
       `}</style>
     </div>
   );
