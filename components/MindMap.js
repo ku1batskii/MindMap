@@ -686,6 +686,8 @@ const setTreeSave = useCallback((t) => {
       isEditing={editId === n.id}
       isNew={newIds.has(n.id)}
 
+      editMode={editMode}
+
       constants={{
         NW,
         PAD_TOP,
@@ -878,7 +880,7 @@ const setTreeSave = useCallback((t) => {
 
       <style>{`
         @keyframes blink{0%,100%{opacity:1}50%{opacity:0}}
-        @keyframes nodeIn{from{opacity:0;transform:scale(0.5)}to{opacity:1;transform:scale(1)}}
+        
         *{box-sizing:border-box;}
         input::placeholder,textarea::placeholder{color:rgba(0,255,136,0.3);}
         button{outline:none;}
