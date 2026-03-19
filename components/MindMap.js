@@ -1,4 +1,3 @@
-import usePointerControls from "../hooks/usePointerControls";
 import Node from "./Node";
 import CLIENT_CONFIG from '../config.js';
 import { useState, useEffect, useRef, useCallback } from "react";
@@ -382,10 +381,6 @@ useEffect(() => {
 
     if (ptrs.size === 0) {
       flushT(tfmRef.current);
-      if (drag && !drag.moved && editModeRef.current && drag.id !== "ROOT") {
-        setSelId(prev => (prev === drag.id ? null : drag.id));
-        setEditId(null);
-      }
       if (pan && !pan.moved && editModeRef.current) {
         setSelId(null);
         setEditId(null);
@@ -558,6 +553,18 @@ const setTreeSave = useCallback((t) => {
     a.download=(tree.goal||"mindmap").replace(/\s+/g,"_")+".svg";
     a.click();URL.revokeObjectURL(a.href);
   },[tree.goal]);
+
+
+  // ── Handle node pointer down ─────────────────────────────────────────────
+  const handlePointerDown = useCallback((e, node) => {
+    // В edit mode — выбираем ноду
+    if (editModeRef.current) {
+      setSelId(prev => (prev === node.id ? null : node.id));
+      setEditId(null);
+      e.stopPropagation();
+    }
+    // В обычном режиме — drag обрабатывается inline pointer handler на SVG
+  }, []);
 
   // ── Build edges ────────────────────────────────────────────────────────────
   const edges=[];
