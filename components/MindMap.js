@@ -673,11 +673,11 @@ const setTreeSave = useCallback((t) => {
   const TOP = -h / 2;
   const isSel = editMode && selId === n.id;
   const isNav = !editMode && navSel === n.id;
-  const isNodeNew = newIds.has(n.id);
+  const isNodeNew = false; // анимация временно отключена
   return (
     <g key={n.id}
       transform={`translate(${p.x},${p.y})`}
-      style={{ cursor: "pointer", opacity: isNodeNew ? 0 : 1, animation: isNodeNew ? "fadeIn 0.35s ease-out forwards" : "none" }}
+      style={{ cursor: "pointer" }} className={isNodeNew ? "node-new" : ""}
       data-nodeid={n.id}
     >
       {(isSel || isNav) && (
@@ -892,7 +892,7 @@ const setTreeSave = useCallback((t) => {
       )}
 
       <style>{`
-        @keyframes blink{0%,100%{opacity:1}50%{opacity:0}} @keyframes fadeIn{from{opacity:0}to{opacity:1}}
+        @keyframes blink{0%,100%{opacity:1}50%{opacity:0}} @keyframes fadeIn{from{opacity:0}to{opacity:1}} .node-new{animation:fadeIn 0.4s ease-out forwards;}
         
         *{box-sizing:border-box;}
         input::placeholder,textarea::placeholder{color:rgba(0,255,136,0.3);}
