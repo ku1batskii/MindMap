@@ -1,3 +1,5 @@
+import usePointerControls from "../hooks/usePointerControls";
+import Node from "./Node";
 import CLIENT_CONFIG from '../config.js';
 import { useState, useEffect, useRef, useCallback } from "react";
 
@@ -557,7 +559,6 @@ const setTreeSave = useCallback((t) => {
     a.click();URL.revokeObjectURL(a.href);
   },[tree.goal]);
 
-
   // ── Build edges ────────────────────────────────────────────────────────────
   const edges=[];
   if(tree.goal){
@@ -666,64 +667,41 @@ const setTreeSave = useCallback((t) => {
 {tree.nodes.map((n) => {
   const p = pos[n.id];
   if (!p) return null;
-  const ns = NS[n.type] || NS.idea;
-  const h = nh(n.title, n.note);
-  const tl = wrap(n.title || "", TITLE_MAX);
-  const nl = wrap(n.note || "", NOTE_MAX);
-  const TOP = -h / 2;
-  const isSel = editMode && selId === n.id;
-  const isNav = !editMode && navSel === n.id;
-  const isNodeNew = false; // анимация временно отключена
+
   return (
-    <g key={n.id}
-      transform={`translate(${p.x},${p.y})`}
-      style={{ cursor: "pointer" }} className={isNodeNew ? "node-new" : ""}
-      data-nodeid={n.id}
-    >
-      {(isSel || isNav) && (
-        <rect x={-NW/2-3} y={TOP-3} width={NW+6} height={h+6} rx={7}
-          fill="none" stroke={C.accent} strokeWidth={2} opacity={0.85} />
-      )}
-      {editMode && !isSel && (
-        <rect x={-NW/2-2} y={TOP-2} width={NW+4} height={h+4} rx={7}
-          fill="none" stroke={C.accentFaint} strokeWidth={1} strokeDasharray="4 3" />
-      )}
-      <rect x={-NW/2} y={TOP} width={NW} height={h} rx={6}
-        fill={ns.fill} stroke={ns.stroke} strokeWidth={1.5}
-        strokeDasharray={n.confidence==="low"?"4 3":undefined}
-        opacity={n.confidence==="low"?0.75:1} />
-      {tl.map((line, li) => (
-        <text key={"t"+li} x={-NW/2+9} y={TOP+PAD_TOP+TITLE_LH*0.82+li*TITLE_LH}
-          fill={ns.color} fontSize={11} fontWeight="700"
-          fontFamily="'Courier New',monospace" style={{pointerEvents:"none"}}>
-          {line}
-        </text>
-      ))}
-      {nl.length > 0 && (
-        <line x1={-NW/2+9} y1={TOP+PAD_TOP+tl.length*TITLE_LH+DIV_GAP}
-          x2={NW/2-9} y2={TOP+PAD_TOP+tl.length*TITLE_LH+DIV_GAP}
-          stroke={ns.stroke} strokeWidth={0.5} opacity={0.3} />
-      )}
-      {nl.map((line, li) => {
-        const dy = TOP+PAD_TOP+tl.length*TITLE_LH+DIV_GAP+DIV_H+NOTE_GAP+NOTE_LH*0.82;
-        return (
-          <text key={"n"+li} x={-NW/2+9} y={dy+li*NOTE_LH}
-            fill={ns.color} fontSize={9.5} opacity={dark?0.62:0.75}
-            fontFamily="'Courier New',monospace" style={{pointerEvents:"none"}}>
-            {line}
-          </text>
-        );
-      })}
-      <text x={-NW/2+7} y={h/2-3} fill={ns.stroke} fontSize={6.5}
-        opacity={0.35} letterSpacing={1} fontFamily="'Courier New',monospace"
-        style={{pointerEvents:"none"}}>
-        {n.type.toUpperCase()}
-      </text>
-      <circle cx={NW/2-9} cy={h/2-6} r={2.5}
-        fill={n.confidence==="high"?ns.stroke:"none"}
-        stroke={ns.stroke} strokeWidth={1} opacity={0.38}
-        style={{pointerEvents:"none"}} />
-    </g>
+    <Node
+      key={n.id}
+      node={n}
+      pos={p}
+
+      isSelected={editMode && selId === n.id}
+      isNavSelected={!editMode && navSel === n.id}
+      isEditing={editId === n.id}
+      isNew={newIds.has(n.id)}
+
+      constants={{
+        NW,
+        PAD_TOP,
+        TITLE_LH,
+        NOTE_LH,
+        DIV_GAP,
+        DIV_H,
+        NOTE_GAP,
+        TITLE_MAX,
+        NOTE_MAX,
+      }}
+
+      theme={{
+        NS,
+        C,
+        dark,
+      }}
+
+      wrap={wrap}
+      nodeHeight={nh}
+
+      onPointerDown={handlePointerDown}
+    />
   );
 })}
           </g>
@@ -892,8 +870,8 @@ const setTreeSave = useCallback((t) => {
       )}
 
       <style>{`
-        @keyframes blink{0%,100%{opacity:1}50%{opacity:0}} @keyframes fadeIn{from{opacity:0}to{opacity:1}} .node-new{animation:fadeIn 0.4s ease-out forwards;}
-        
+        @keyframes blink{0%,100%{opacity:1}50%{opacity:0}}
+        @keyframes nodeIn{from{opacity:0;transform:scale(0.5)}to{opacity:1;transform:scale(1)}}
         *{box-sizing:border-box;}
         input::placeholder,textarea::placeholder{color:rgba(0,255,136,0.3);}
         button{outline:none;}
